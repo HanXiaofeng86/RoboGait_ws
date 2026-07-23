@@ -1,0 +1,16 @@
+# Topics recorded by scripts/record_navigation_test.sh (design doc section 10).
+topics:
+  - /tf
+  - /tf_static
+  - /scan
+  - /map
+  - /plan
+  - /transformed_global_plan
+  - /cmd_vel_nav
+  - /cmd_vel_smoothed
+  - /cmd_vel
+  - /odometry/wheels
+  - /odometry/filtered
+  - /imu/data
+  - /local_costmap/costmap
+  - /local_costmap/costmap_updates

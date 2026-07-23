@@ -1,0 +1,32 @@
+# Reference of sensor topics and TF frames used by the pure MPPI stack.
+# This file is documentation + input for preflight checks; nodes themselves
+# are configured by upstream accessories.yaml and this package's launch files.
+
+frames:
+  map: map            # SLAM / map_server localization
+  odom: odom          # EKF output frame
+  base: base_link     # robot body
+  laser: lidar_link   # RPLidar S2
+  imu: imu_link       # BNO055
+
+topics:
+  scan:
+    name: /scan
+    type: sensor_msgs/msg/LaserScan
+    source: rplidar_ros
+  imu:
+    name: /imu/data
+    type: sensor_msgs/msg/Imu
+    source: bno055
+  wheel_odometry:
+    name: /odometry/wheels
+    type: nav_msgs/msg/Odometry
+    source: roverrobotics_driver
+  filtered_odometry:
+    name: /odometry/filtered
+    type: nav_msgs/msg/Odometry
+    source: robot_localization ekf_filter_node
+  cmd_vel_chain:
+    mppi_output: /cmd_vel_nav
+    smoothed: /cmd_vel_smoothed
+    final: /cmd_vel

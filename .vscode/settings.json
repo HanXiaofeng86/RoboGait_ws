@@ -1,0 +1,6 @@
+{
+  // 打开 .md 时直接进入预览（表格/Mermaid 立刻可见），不用再按 Ctrl+Shift+V
+  "workbench.editorAssociations": {
+    "*.md": "vscode.markdown.preview.editor"
+  }
+}

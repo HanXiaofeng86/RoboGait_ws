@@ -1,0 +1,26 @@
+# colcon / ROS 2
+build/
+install/
+log/
+.ros-log/
+**/COLCON_IGNORE
+
+# bags & local runtime
+bags/
+*.bag
+*.db3
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# IDE / OS
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Optional: keep Cursor project rules but skip local caches if present
+.cursor/projects/
