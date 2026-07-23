@@ -2,6 +2,7 @@
 
 > 本文件记录 `mppi_navigation` 包（纯 MPPI 导航）的架构、文件作用与常用命令。  
 > **英文版：** `PROJECT_CHANGES_EN.md` — **中英文须同步更新**（见 `.cursor/rules/update-changelog.mdc`）。  
+> **语言约定：** 仅本文件（`PROJECT_CHANGES.md`）保持中文；包 README、`TEST_PLAN.md`、仓库根 `README.md` 等其它文档用英文。  
 > **维护规则**：AI 每次修改/新增/删除代码文件后，必须同步更新本文件（及英文版）的文件关系、文件手册与命令手册。
 
 ---
@@ -510,7 +511,8 @@ MPPI 基线数值（频率 20Hz、batch、critics 等）都在 `nav2_pure_mppi_p
 | `PROJECT_CHANGES_EN.md` | 英文项目手册（与本文件同步维护） |
 | `README.md` | GitHub / 仓库入口说明（英文摘要） |
 | `.gitignore` | 忽略 build/install/log/bags 等，不上传编译产物 |
-| `TEST_PLAN.md` | 实机验收清单：阶段 A/B 前置 + 测试 T1–T8（空闲/直线/转弯/S弯/避障/急停/频率） |
+| `TEST_PLAN.md` | 实机验收清单（英文）：阶段 A/B + 测试 T1–T8 |
+| `src/mppi_navigation/README.md` | 包说明（英文） |
 | `src/navigation2/` | Nav2 源码（要改 MPPI critic 等时才深入） |
 | `ARCHITECTURE.html` | 可选备份；结构以本文件第一节为准 |
 

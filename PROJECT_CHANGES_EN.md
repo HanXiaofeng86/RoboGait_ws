@@ -1,7 +1,8 @@
 # RoboGait_ws Project Handbook (English)
 
 > This file documents the architecture, file roles, and common commands for the `mppi_navigation` package (pure MPPI navigation).  
-> **Chinese counterpart:** `PROJECT_CHANGES.md` — **keep both in sync** when updating (see `.cursor/rules/update-changelog.mdc`).
+> **Chinese counterpart:** `PROJECT_CHANGES.md` — **keep both in sync** when updating (see `.cursor/rules/update-changelog.mdc`).  
+> **Language policy:** Only `PROJECT_CHANGES.md` stays Chinese; package README, `TEST_PLAN.md`, root `README.md`, and this English handbook are English.
 
 ---
 
@@ -503,7 +504,8 @@ Entry: `python3 scripts/analyze_navigation_bag.py <bag_path>`.
 | Item | Role |
 |------|------|
 | `.vscode/settings.json` | Markdown opens in preview |
-| `TEST_PLAN.md` | On-robot acceptance: stages A/B + tests T1–T8 |
+| `TEST_PLAN.md` | On-robot acceptance checklist (English): stages A/B + tests T1–T8 |
+| `src/mppi_navigation/README.md` | Package README (English) |
 | `PROJECT_CHANGES.md` | Chinese handbook (keep in sync with this file) |
 | `README.md` | GitHub / repo landing summary |
 | `.gitignore` | Ignore build/install/log/bags (no build artifacts in git) |

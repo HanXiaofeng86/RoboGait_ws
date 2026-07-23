@@ -1,9 +1,9 @@
 # mppi_navigation
 
-Rover Robotics Mini 的纯 MPPI 导航包（模式 1：RViz 目标；模式 2：预定义路径）。
-MPPI 生成完整速度对 (v, ω)，其它节点只允许原样透传或整组置零。
+Pure MPPI navigation package for the Rover Robotics Mini (Mode 1: RViz goal; Mode 2: predefined path).  
+MPPI produces the full velocity pair `(v, ω)`; other nodes may only pass commands through unchanged or zero them as a group.
 
-## 控制链路
+## Control chain
 
 ```text
 RViz 2D Goal
@@ -14,129 +14,135 @@ controller_server (nav2_mppi_controller)  →  /cmd_vel_nav
     ↓
 velocity_smoother                          →  /cmd_vel_smoothed
     ↓
-safety_gate（仅 透传 / 置零）               →  /cmd_vel
+safety_gate (pass-through or zero only)    →  /cmd_vel
     ↓
-roverrobotics_driver → 底盘
+roverrobotics_driver → chassis
     ↓
-轮式里程计 + IMU → EKF → /odometry/filtered → MPPI 下一周期
+wheel odometry + IMU → EKF → /odometry/filtered → next MPPI cycle
 ```
 
-## 启动（模式 1）
+## Launch (Mode 1)
 
 ```bash
 cd ~/RoboGait_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 
-# 默认：map_server + AMCL + lab2_new（启动后用 2D Pose Estimate 校正初始位姿）
+# Default: map_server + AMCL + lab2_new (set initial pose with 2D Pose Estimate after start)
 ros2 launch mppi_navigation rviz_goal_navigation.launch.py
 
-# 在线 SLAM（无需已有地图）：
+# Online SLAM (no prior map):
 ros2 launch mppi_navigation rviz_goal_navigation.launch.py slam:=True
 
-# 仅验证软件链路时关掉 AMCL（静态 map->odom）：
+# Software pipe check only — disable AMCL (static map→odom):
 ros2 launch mppi_navigation rviz_goal_navigation.launch.py amcl:=False
 
-# 不开 RViz：
+# Without RViz:
 ros2 launch mppi_navigation rviz_goal_navigation.launch.py use_rviz:=False
 ```
 
-注意：布尔参数必须写 `True`/`False`（首字母大写）。
+Note: boolean launch args must be `True` / `False` (capitalized).
 
-## 启动（模式 2：预定义路径）
+## Launch (Mode 2: predefined path)
 
-先按上面启动整个导航栈，再发送路径（路径只存几何，速度全部由 MPPI 在线计算）：
+Start the full nav stack first (Mode 1), then send a path (geometry only; MPPI computes velocity online):
 
 ```bash
-# 内置测试路径：straight / left_90 / right_90 / s_curve / obstacle_avoid
+# Built-in test paths: straight / left_90 / right_90 / s_curve / obstacle_avoid
 ros2 launch mppi_navigation follow_predefined_path.launch.py path_name:=left_90
 
-# 或者直接 ros2 run：
-ros2 run mppi_navigation follow_path --ros-args -p path_file:=/绝对路径/my_path.yaml
+# Or ros2 run:
+ros2 run mppi_navigation follow_path --ros-args -p path_file:=/absolute/path/my_path.yaml
 ```
 
-- `frame: local` 的路径以机器人当前位姿为起点自动变换到 map 系
-- 路径文件在 `paths/*.yaml`，可用 `python3 scripts/generate_test_paths.py` 重新生成
-- 发送的路径同时发布到 `/predefined_path`（RViz 可视化）
+- Paths with `frame: local` are transformed into `map` from the robot’s current pose
+- Path files live in `paths/*.yaml`; regenerate with `python3 scripts/generate_test_paths.py`
+- The sent path is also published on `/predefined_path` (for RViz)
 
-取消当前导航（测试 7）：
+Cancel active navigation (Test 7):
 
 ```bash
 ros2 run mppi_navigation cancel_navigation
 ```
 
-## Launch 文件
+## Launch files
 
-| 文件 | 作用 |
+| File | Role |
 |------|------|
-| `rviz_goal_navigation.launch.py` | 顶层一键启动（硬件 + 导航 + RViz） |
-| `rover_mini_hardware.launch.py` | 底盘驱动 + URDF + 激光 + IMU（Include 上游 mini.launch.py） |
-| `nav2_mppi_controller.launch.py` | EKF + 定位（SLAM/AMCL/静态 TF 三选一）+ Nav2 全栈 + 速度链 + 安全闸 |
-| `follow_predefined_path.launch.py` | 模式 2：向已运行的栈发送预定义路径（FollowPath/MPPI） |
-| `ekf_amcl_localization.launch.py` | 单独启动 EKF（调试用） |
+| `rviz_goal_navigation.launch.py` | Top-level one-shot (hardware + nav + RViz) |
+| `rover_mini_hardware.launch.py` | Chassis driver + URDF + lidar + IMU (includes upstream `mini.launch.py`) |
+| `nav2_mppi_controller.launch.py` | EKF + localization (SLAM / AMCL / static TF) + Nav2 stack + velocity chain + safety gate |
+| `follow_predefined_path.launch.py` | Mode 2: FollowPath to an already-running stack |
+| `ekf_amcl_localization.launch.py` | EKF-only (debug) |
 
-## 配置文件
+## Config files
 
-| 文件 | 作用 |
+| File | Role |
 |------|------|
-| `config/nav2_pure_mppi_params.yaml` | Nav2 全部参数；MPPI 基线：20 Hz、time_steps 44、batch 1200、vx_std 0.25、wz_std 0.35、temperature 0.24、gamma 0.022、vx∈[0,1.2]、wz≤2.0，8 个 critics |
-| `config/robot_localization_ekf.yaml` | EKF：轮式里程计(vx,vy) + IMU(yaw rate) |
-| `config/sensor_topics_frames.yaml` | 话题与 TF frame 对照表 |
-| `config/diagnostic_recording_topics.yaml` | 录包话题列表 |
+| `config/nav2_pure_mppi_params.yaml` | Full Nav2 params; MPPI baseline: 20 Hz, time_steps 44, batch 1200, vx_std 0.25, wz_std 0.35, temperature 0.24, gamma 0.022, vx∈[0,1.2], wz≤2.0, 8 critics |
+| `config/robot_localization_ekf.yaml` | EKF: wheel odom (vx, vy) + IMU (yaw rate) |
+| `config/sensor_topics_frames.yaml` | Topic / TF frame reference |
+| `config/diagnostic_recording_topics.yaml` | Bag recording topic list |
 
-## 安全闸（safety_gate）
+## Safety gate (`safety_gate`)
 
-- 输入 `cmd_vel_smoothed`，输出 `/cmd_vel`
-- 只有两种行为：**原样透传** 或 **输出零速**；永不生成替代指令
-- 置零条件：指令超时（0.5 s）、里程计超时（0.5 s）、`/safety_estop` 为 true
-- 软件急停：
+- Input: `cmd_vel_smoothed` → output: `/cmd_vel`
+- Only two behaviors: **pass through** or **publish zero**; never invent substitute commands
+- Zero when: command timeout (0.5 s), odometry timeout (0.5 s), or `/safety_estop` is true
+- Software estop:
 
 ```bash
-ros2 topic pub -1 /safety_estop std_msgs/msg/Bool "{data: true}"   # 停
-ros2 topic pub -1 /safety_estop std_msgs/msg/Bool "{data: false}"  # 恢复
+ros2 topic pub -1 /safety_estop std_msgs/msg/Bool "{data: true}"   # stop
+ros2 topic pub -1 /safety_estop std_msgs/msg/Bool "{data: false}"  # clear
 ```
 
-## 预检与测试工具
+## Preflight and test tools
 
 ```bash
-# 话题是否有数据（默认观察 5 秒）
+# Key topics publishing? (default watch window 5 s)
 ./scripts/preflight_check_topics.sh
 
-# TF 链 map->odom->base_link 是否完整
+# TF chain map→odom→base_link complete?
 ./scripts/preflight_check_tf.sh
 
-# 测试 1（系统空闲）：无目标时 /cmd_vel 必须保持零
+# Test 1 (idle): /cmd_vel must stay zero with no goal
 ros2 run mppi_navigation idle_check 10
-# 或: python3 -m mppi_navigation.preflight.idle_cmd_vel_check 10
+# or: python3 -m mppi_navigation.preflight.idle_cmd_vel_check 10
 
-# 雷达 internal error 时软件复位（无需断电）
+# Lidar internal error: software reset (no power cycle)
 ros2 run mppi_navigation reset_rplidar
 
-# 录制导航测试包
+# Record a navigation test bag
 ./scripts/record_navigation_test.sh straight_test
 
-# 分析录包：指标 JSON + 图
-python3 scripts/analyze_navigation_bag.py ~/RoboGait_ws/bags/<bag目录>
+# Analyze bag: metrics JSON + plots
+python3 scripts/analyze_navigation_bag.py ~/RoboGait_ws/bags/<bag_dir>
 ```
 
-## MPPI 调参入口
+## MPPI tuning entry points
 
-- 基线常量说明：`mppi_navigation/mppi_controller/baseline_params.py`
-- 8 个 critic 文档：`mppi_navigation/mppi_controller/critics_reference.py`
-- 实际生效参数：`config/nav2_pure_mppi_params.yaml`（改完 `colcon build` 后生效，
-  symlink 安装下改 yaml 无需重新编译，重启 launch 即可）
+- Baseline constants: `mppi_navigation/mppi_controller/baseline_params.py`
+- Critic notes (8): `mppi_navigation/mppi_controller/critics_reference.py`
+- Live parameters: `config/nav2_pure_mppi_params.yaml`  
+  (with `--symlink-install`, edit yaml and restart launch—no rebuild required)
 
-## 自定义 critic（M10）
+## Custom critic (M10)
 
-Nav2 源码已在本工作空间：`src/navigation2/nav2_mppi_controller/`。
-新 critic 参考 `src/critics/*.cpp`，在 `critics.xml` 注册，然后：
+Nav2 sources are in this workspace: `src/navigation2/nav2_mppi_controller/`.  
+Add a critic under `src/critics/*.cpp`, register in `critics.xml`, then:
 
 ```bash
 colcon build --packages-select nav2_mppi_controller --symlink-install
 ```
 
-## 与旧 rover_workspace 的区别
+## Difference from the old `rover_workspace`
 
-- 不迁入人体检测 / Orbbec / 云台 / `robot_controller_remapping`
-- 最终 `/cmd_vel` 的 `linear.x` 与 `angular.z` 都来自 MPPI（旧架构中线速度被人距 PID 覆盖）
-- 不要同时 source 两个工作空间
+- No person detection / Orbbec / gimbal / `robot_controller_remapping`
+- Final `/cmd_vel` `linear.x` and `angular.z` both come from MPPI (old stack overwrote linear speed with a person-distance PID)
+- Do not `source` both workspaces in the same shell
+
+## Further docs
+
+- Chinese handbook: `PROJECT_CHANGES.md` (workspace root)
+- English handbook: `PROJECT_CHANGES_EN.md`
+- On-robot test plan: `TEST_PLAN.md`

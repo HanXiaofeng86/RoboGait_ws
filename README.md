@@ -8,9 +8,10 @@ Nav2 MPPI produces the full velocity `(v, ω)`. Other nodes may only **pass thro
 
 | File | Content |
 |------|---------|
-| [PROJECT_CHANGES.md](PROJECT_CHANGES.md) | Handbook (Chinese) |
-| [PROJECT_CHANGES_EN.md](PROJECT_CHANGES_EN.md) | Handbook (English) |
-| [TEST_PLAN.md](TEST_PLAN.md) | On-robot test checklist |
+| [PROJECT_CHANGES.md](PROJECT_CHANGES.md) | Full handbook (**Chinese** — keep as the CN source of truth) |
+| [PROJECT_CHANGES_EN.md](PROJECT_CHANGES_EN.md) | Full handbook (English) |
+| [TEST_PLAN.md](TEST_PLAN.md) | On-robot test checklist (English) |
+| [src/mppi_navigation/README.md](src/mppi_navigation/README.md) | Package README (English) |
 
 ## Quick start
 
