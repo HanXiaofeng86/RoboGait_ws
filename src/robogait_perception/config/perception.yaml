@@ -1,0 +1,9 @@
+person_position_topic: /orbbec/person_position
+person_center_pixel_topic: /orbbec/person_center_pixel
+num_users_topic: /orbbec/num_users
+default_center_pixel: 320
+timeout_sec: 0.5
+min_z_m: 0.15
+max_z_m: 15.0
+hold_last_valid_sec: 1.2
+publish_period_sec: 0.02

@@ -1,729 +1,543 @@
-# RoboGait_ws 项目手册
+# RoboGait_ws 项目手册（给小白看）
 
-> 本文件记录 `mppi_navigation` 包（纯 MPPI 导航）的架构、文件作用与常用命令。  
-> **英文版：** `PROJECT_CHANGES_EN.md` — **中英文须同步更新**（见 `.cursor/rules/update-changelog.mdc`）。  
-> **语言约定：** 仅本文件（`PROJECT_CHANGES.md`）保持中文；包 README、`TEST_PLAN.md`、仓库根 `README.md` 等其它文档用英文。  
-> **维护规则**：AI 每次修改/新增/删除代码文件后，必须同步更新本文件（及英文版）的文件关系、文件手册与命令手册。
+> **中文主文档。** 英文版：`PROJECT_CHANGES_EN.md`（须同步）。  
+> 写法：先总览，再按**包**把每个重要文件说清楚——**是干什么的、平时要不要改、想改什么功能去哪个文件**。
 
 ---
 
-## 一、项目概览
+## 一、先搞懂这两句话
 
-- 工作空间：`~/RoboGait_ws`
-- 核心包：`src/mppi_navigation`（ament_python）
-- 目标：Rover Mini 仅用 Nav2 MPPI 控制器导航；MPPI 生成完整速度对 (v, ω)，其它节点只允许透传或整组置零
-- 当前阶段：模式 1 + 模式 2 代码全部完成；**硬件已恢复（2026-07-21）**；AMCL 默认开启 + 默认地图 `lab2_new`
+**包名前缀（看名字就分清）：**
 
-> 本工作区打开 `.md` 默认进预览（`.vscode/settings.json`）。表格是标准 Markdown，预览里是正常表格，不会出现 HTML 标签。  
-> **文件之间谁调用谁、关系图：见第二节。**
-
----
-
-### 1.1 为什么这样分 Launch
-
-和 Nav2 / Rover 常见做法一致：三层分离，顶层只做拼装。
-
-| 层 | 职责单一 | 好处 |
-|----|----------|------|
-| `rover_mini_hardware` | 只起传感器和底盘 | 单独调试硬件，不碰导航 |
-| `nav2_mppi_controller` | 只起定位 + Nav2 + 速度链 | 换地图 / AMCL / SLAM 时不用重起硬件 |
-| `rviz_goal_navigation` | 一键把上面两层 + RViz 拼起来 | 日常只需记一条命令 |
-
-**这样分配的优点**
-
-- **顶层薄、下层可复用**：模式 2 只需再起 `follow_predefined_path`
-- **RViz 可选**：`use_rviz:=False`
-- **速度链 remap 集中**：全在 `nav2_mppi_controller` 里
-
-**注意**：日常只跑顶层；不要同时再跑一遍 `nav2_mppi_controller`，否则会起两套 Nav2。
-
----
-
-### 1.2 Launch 包含关系
-
-```text
-                    rviz_goal_navigation.launch.py
-                           （日常只跑这个）
-                                  │
-          ┌───────────────────────┼───────────────────────┐
-          ▼                       ▼                       ▼
-   rover_mini_hardware            nav2_mppi_controller                 rviz2
-      （硬件层）               （导航层）                （可选）
-          │                       │
-          │                       ├── EKF
-          │                       ├── map + AMCL（默认）
-          ├── driver              ├── planner / BT / MPPI
-          ├── rplidar             └── smoother → safety_gate
-          ├── bno055
-          └── robot_state_publisher
-
-                    follow_predefined_path.launch.py
-                         （模式2：另开终端）
-                                  │
-                                  └──► 向已运行的导航层发 FollowPath
-```
-
----
-
-### 1.3 谁起什么 / 什么时候用
-
-| 脚本 | 角色 | 硬件 | Nav2/MPPI | RViz |
-|------|------|:----:|:---------:|:----:|
-| `rviz_goal_navigation.launch.py` | **顶层一键入口** | Y | Y | Y（可关） |
-| `nav2_mppi_controller.launch.py` | **导航栈本体** | N | Y | N |
-| `rover_mini_hardware.launch.py` | **硬件层** | Y | N | N |
-| `follow_predefined_path.launch.py` | **模式 2 发路径** | N | N（依赖已运行的栈） | N |
-| `ekf_amcl_localization.launch.py` | 调试用 EKF | N | N | N |
-
-| 脚本 | 什么时候用 |
-|------|-----------|
-| `rviz_goal_navigation` | 日常导航、设位姿、发 Goal |
-| `nav2_mppi_controller` | 一般**不单独跑**；被顶层 Include |
-| `rover_mini_hardware` | 只测雷达 / IMU / 底盘 |
-| `follow_predefined_path` | 全栈已起后，另开终端发预定义路径 |
-| `ekf_amcl_localization` | 日常不用 |
-
-**一句话**：`rviz_goal_navigation` = 硬件 + 导航 + RViz；RViz 只负责看和点，不算导航。
-
----
-
-### 1.4 定位模式
-
-| 启动参数 | map→odom 谁提供 | 需要地图？ | 2D Pose Estimate | 适用场景 |
-|----------|-----------------|------------|------------------|----------|
-| **默认** `amcl:=True` | AMCL | 要（lab2_new） | 要（必须先标） | **真实导航** |
-| `amcl:=False` | 静态恒等 TF | 有图但不定位 | 无效（没人订阅） | 只验证软件链路 |
-| `slam:=True` | SLAM Toolbox | 不要（边建） | 一般不用 | 还没有地图时 |
-
----
-
-### 1.5 控制链路
-
-```text
-RViz (Goal / Pose)
-        │
-        ▼
-  bt_navigator ──► planner ──► /plan ──► MPPI
-                                           │
-                              /cmd_vel_nav ▼
-                              velocity_smoother
-                                           │
-                         /cmd_vel_smoothed ▼
-                              safety_gate（透传或置零）
-                                           │
-                                /cmd_vel ▼
-                              driver → 底盘
-                                           │
-                    wheels + IMU ──► EKF ──┘
-                    /scan + map ──► AMCL ──┘（回到 MPPI）
-```
-
-| 话题 | 发布者 | 订阅者 | 含义 |
-|------|--------|--------|------|
-| `/cmd_vel_nav` | MPPI / behavior | velocity_smoother | MPPI 原始输出 |
-| `/cmd_vel_smoothed` | velocity_smoother | safety_gate | 限幅 / 加速度平滑后 |
-| `/cmd_vel` | **仅** safety_gate | driver | 最终下发；只透传或全零 |
-
----
-
-### 1.6 默认启动后节点分组
-
-| 分组 | 节点 | 作用 |
-|------|------|------|
-| 硬件 | driver / rplidar / bno055 / rsp | 底盘、激光、IMU、TF 模型 |
-| 定位 | map_server + amcl + ekf | 地图、粒子定位、里程计融合 |
-| Nav2 | controller(MPPI) / planner / bt / smoother / … | 规划与跟踪 |
-| 自研 | safety_gate | 最终 `/cmd_vel` 闸门 |
-| 界面 | rviz2 | 可视化与手动设目标 |
-
----
-
-## 二、文件关系（谁调用谁）
-
-> 第二节讲「文件之间怎么连」；第三节才是「每个文件干什么」。  
-> 图是纯文本，预览里直接能看（不用装 Mermaid 插件）。
-
-### 2.1 一张总图：从启动到轮子
-
-```text
-你敲的命令
-    │
-    ▼
-┌───────────────────────────────────────────────────────────┐
-│  launch/                                                  │
-│   rviz_goal_navigation.launch.py     ← 日常一键入口        │
-│        │                                                  │
-│        ├── include → rover_mini_hardware.launch.py        │
-│        │                 └── 上游 mini.launch             │
-│        │                      (底盘 / 雷达 / IMU / URDF)   │
-│        │                                                  │
-│        └── include → nav2_mppi_controller.launch.py       │
-│                          ├── 读 config/*.yaml             │
-│                          ├── 起 EKF / AMCL / Nav2 / MPPI  │
-│                          └── 起 safety_gate（自研）        │
-└───────────────────────────────────────────────────────────┘
-        │
-        ▼ 运行时话题（不是文件，但是关系的结果）
-  /scan /imu /wheels → EKF → /odometry/filtered
-  RViz Goal → 规划 → MPPI → /cmd_vel_nav → 平滑 → 安全闸 → /cmd_vel → 底盘
-```
-
-### 2.2 Launch 互相怎么套
-
-```text
-                    ┌─────────────────────────────┐
-                    │ rviz_goal_navigation        │
-                    │ （顶层：硬件+导航+可选RViz）  │
-                    └─────────────┬───────────────┘
-                                  │ include
-              ┌───────────────────┴───────────────────┐
-              ▼                                       ▼
-┌─────────────────────────┐             ┌─────────────────────────┐
-│ rover_mini_hardware     │             │ nav2_mppi_controller    │
-│ 只传感器+底盘            │             │ EKF+定位+MPPI+安全闸     │
-└─────────────────────────┘             └───────────┬─────────────┘
-                                                    │ 读
-                                                    ▼
-                                        config/nav2_pure_mppi_params.yaml
-                                        config/robot_localization_ekf.yaml
-                                        maps/lab2_new.yaml（默认地图）
-
-另两条「旁路」，不替代顶层：
-
-  follow_predefined_path.launch.py
-       │  要求：上面导航栈已经在跑
-       ▼
-  path_following/follow_path_client.py  →  发 FollowPath
-       ▲
-       │ 也可直接
-  ros2 run mppi_navigation follow_path
-
-  ekf_amcl_localization.launch.py  →  只调试 EKF，日常不用
-```
-
-| 关系 | 说明 |
+| 前缀 | 意思 |
 |------|------|
-| 顶层 **include** 硬件层 + 导航层 | 所以日常只需开一个 `rviz_goal_navigation` |
-| 导航层 **加载** `config/` | 改 yaml 后重启 launch 即可，一般不用改 launch |
-| 模式 2 launch **不**再起硬件 | 它只是往已运行的栈里「塞一条路径」 |
+| **`robot_*`** | 纯机器人（没人） |
+| **`robogait_*`** | 跟人（有人） |
+| 其它 | 驱动 / Nav2 第三方 |
 
-### 2.3 配置文件被谁用
+**模式 A — 纯机器人**（`robot_*`）
 
-```text
-config/nav2_pure_mppi_params.yaml
-    └─ 被 nav2_mppi_controller.launch.py 交给 Nav2 / MPPI / smoother / AMCL / safety 参数
+1. **`robot_mppi_navigation`** = **A1**：RViz 点目标。硬件 + Nav2 + MPPI + 安全闸。  
+2. **`robot_simple_commander`** = **A2**：键盘**录轨迹** / **自动跟随**。  
+   **与上包无依赖**（自带栈副本，允许代码重复）。
 
-config/robot_localization_ekf.yaml
-    └─ 被同一 launch 里的 ekf_node（robot_localization）加载
+**模式 B — 跟人**（`robogait_*`，Python）
 
-config/sensor_topics_frames.yaml
-    └─ 主要给人看 + 预检对照；节点不靠它启动
-
-config/diagnostic_recording_topics.yaml
-    └─ 被 scripts/record_navigation_test.sh 用来决定录哪些话题
-
-maps/lab2_new.yaml (+ .pgm)
-    └─ map_server（amcl 模式）默认地图
-
-paths/*.yaml
-    └─ 被 follow_path / follow_predefined_path / generate_test_paths 使用
-```
-
-### 2.4 自研 Python：入口 → 实现
+3. **`robogait_person_interfaces`** = 消息 `User.msg`（检测 + xyz）。  
+4. **`robogait_perception`** = Orbbec 桥接 → `user_raw`。  
+5. **`robogait_gimbal`** = 云台（像素 PID + Dynamixel 舵机）。  
+6. **`robogait_person_follow`** = 人 → Nav2 目标；**底盘速度仍全由 MPPI**（无 PID 混速）。
 
 ```text
-你敲的 ros2 run                      真正干活的代码
-─────────────────                    ────────────────
-safety_gate          ──nodes/──►     safety/cmd_vel_safety_gate.py
-                                       ├─ stop_conditions.py
-                                       ├─ pass_or_zero_policy.py
-                                       └─ twist_copy.py
-
-follow_path          ──nodes/──►     path_following/follow_path_client.py
-                                       ├─ path_io.py（读写 yaml）
-                                       └─ generators.py（生成 paths/*.yaml 的内容）
-
-cancel_navigation    ──nodes/──►     path_following/cancel_client.py
-
-idle_check           ──nodes/──►     preflight/idle_cmd_vel_check.py
-
-reset_rplidar        ──nodes/──►     tools/reset_rplidar.py
-                     （scripts/reset_rplidar.py 也是同一件事）
+模式 A（robot_* 纯机器人）              模式 B（robogait_* 跟人）
+  A1 robot_mppi_navigation                B0 云台 → robogait_gimbal
+  A2 robot_simple_commander               B1 一站跟人 / B2 叠人层（人→goal→MPPI）
+底盘 [v,ω] 只来自 MPPI；人只提供目标。不要两套 Nav2 同时起。
 ```
 
-**记一句：** `nodes/` = 遥控器按键；`safety/`、`path_following/` 等 = 电路板。
-
-### 2.5 scripts/ 和源码模块的关系
-
-```text
-scripts/preflight_check_topics.sh  ──►  preflight/topic_health_check.py
-scripts/preflight_check_tf.sh      ──►  preflight/tf_tree_check.py
-scripts/record_navigation_test.sh  ──►  读 diagnostic_recording_topics.yaml，调用 ros2 bag
-scripts/analyze_navigation_bag.py  ──►  bag_analysis/ 下各个 metrics + generate_plots
-scripts/generate_test_paths.py     ──►  path_following/generators.py  →  写出 paths/*.yaml
-scripts/reset_rplidar.py           ──►  tools/reset_rplidar.py
-```
-
-### 2.6 运行时数据流（文件如何「接到一起」）
-
-```text
-[硬件层 launch]
-  rplidar ──► /scan ─────────────────────┐
-  bno055  ──► /imu/data ──┐              │
-  driver  ──► /odometry/wheels ──┐       │
-                                 ▼       │
-                    EKF ← robot_localization_ekf.yaml
-                                 │
-                                 ▼
-                      /odometry/filtered
-                      TF: odom→base_link
-                                 │
-[导航层 launch]                   │
-  map_server ← maps/lab2_new     │
-  amcl ← /scan + 地图            │
-         TF: map→odom            │
-                                 ▼
-  bt_navigator / planner / MPPI ← nav2_pure_mppi_params.yaml
-                                 │
-                                 ▼ /cmd_vel_nav
-                         velocity_smoother
-                                 │
-                                 ▼ /cmd_vel_smoothed
-                    safety_gate ← safety/*.py
-                                 │
-                                 ▼ /cmd_vel
-                               底盘 driver
-```
-
-### 2.7 按「你想干什么」找文件
-
-| 你想… | 先看这些 |
-|-------|----------|
-| 启动 / 分层 | `launch/` + 本节 2.2 + 第一节 |
-| 只测传感器 | `rover_mini_hardware` + 第四节命令 4.8 |
-| 改限速、MPPI、AMCL | `config/nav2_pure_mppi_params.yaml` |
-| 改 EKF 融哪些量 | `config/robot_localization_ekf.yaml` |
-| 安全闸逻辑 | `mppi_navigation/safety/` |
-| 预定义路径测试 | `paths/` + `path_following/` + `follow_predefined_path.launch.py` |
-| 预检 / 录包 / 分析 | `scripts/` + `preflight/` + `bag_analysis/` |
-| 每个文件一句说明 | **第三节 文件手册** |
-
----
-
-## 三、文件手册（按目录）
-
-> **这段怎么读：** 下面是「文件夹里有什么文件」，不是「每天要运行的命令」。  
-> - **操作机器人**：优先看 **launch/**、**scripts/**、第四节命令手册。  
-> - **改参数**：看 **config/**。  
-> - **文件怎么连在一起**：看 **第二节**。  
-> - **`mppi_navigation/` 下面一堆 `.py`**：多半是源码实现；日常开车可以跳过，需要改逻辑或查 bug 再翻。
-
-### 先记这张「必看 / 可跳过」
-
-| 目录 | 必看？ | 一句话 |
-|------|--------|--------|
-| `launch/` | 是 | 用哪条命令启动什么 |
-| `config/` | 调参时 | 导航/EKF 等参数写在 yaml 里 |
-| `scripts/` | 是 | 预检、录包、雷达复位等小工具 |
-| `paths/` / `maps/` | 测模式 2 / 换地图时 | 测试路线、实验室地图 |
-| `mppi_navigation/safety/` 等 | 否（开发用） | 源码怎么拆的，不是启动清单 |
-| `nodes/` | 否 | 只是 `ros2 run` 的薄入口 |
-
----
-
-### launch/（启动文件 = 总开关）
-
-| 文件 | 作用 | 你什么时候用 |
-|------|--------------|--------------|
-| `rviz_goal_navigation.launch.py` | **日常导航一键开**：硬件 + 定位 + MPPI + 安全闸 + RViz | 要在 RViz 标位姿、点目标 |
-| `rover_mini_hardware.launch.py` | **只开传感器和底盘**，不开导航 | 查雷达 / IMU / 轮速是否正常 |
-| `nav2_mppi_controller.launch.py` | 导航「大脑」（EKF、AMCL、MPPI、安全闸） | **一般别单独开**；顶层会自动带上 |
-| `follow_predefined_path.launch.py` | 不点 Goal，改让车跟一条写好的路径 | 全栈已开时，做直线/转弯等固定测试 |
-| `ekf_amcl_localization.launch.py` | 单独起 EKF 方便调试 | 日常不用 |
-
-常用参数（顶层）：`amcl:=True`（默认，用地图定位）、`slam:=True`（边走边建图）、`use_rviz:=False`（不开界面）。分层关系见第一节。
-
----
-
-### config/（参数文件 = 调旋钮，不是程序）
-
-| 文件 | 作用 |
-|------|--------------|
-| `nav2_pure_mppi_params.yaml` | **导航总配置**：MPPI 怎么跟路径、限速多少、平滑器、安全闸超时、AMCL 等。改完一般不用重编译，重启 launch 即可 |
-| `robot_localization_ekf.yaml` | **EKF 怎么融合**：轮速给 vx/vy，IMU 给转向角速度 → 输出 `/odometry/filtered` 和 `odom→base_link` |
-| `sensor_topics_frames.yaml` | **对照表**：哪个话题、哪个坐标系叫什么（给人看 + 给预检用），本身不启动节点 |
-| `diagnostic_recording_topics.yaml` | **录包要录哪些话题**的清单（给 `record_navigation_test.sh` 用） |
-
-MPPI 基线数值（频率 20Hz、batch、critics 等）都在 `nav2_pure_mppi_params.yaml` 里；需要抠参数时打开该文件，不必先读 Python。
-
----
-
-### mppi_navigation/（Python 源码包）
-
-下面按**文件夹**说明。多数文件 launch 会间接用到；你很少需要 `python3` 直接跑它们。
-
-#### safety/ —— 速度最后一道闸
-
-> 规矩：只能 **原样放行（PASS）** 或 **改成全零（ZERO）**，不会自己另算一条速度去开。
-
-| 文件 | 作用 |
-|------|--------------|
-| `cmd_vel_safety_gate.py` | **闸门本体**：听平滑后的速度 + 里程计 + 急停；决定发给底盘还是发 0；指令突然没了车还在动，也会补发 0 |
-| `stop_conditions.py` | **什么情况必须停**：指令超时、里程计超时、按下急停 |
-| `pass_or_zero_policy.py` | 把上面的条件落成「放行 / 置零」两种决定 |
-| `twist_copy.py` | 小工具：复制速度消息、造零速、判断是不是零 |
-
-平时不用手开；`rviz_goal_navigation` 会自动带上安全闸。
-
-#### nodes/ —— 命令行入口（很薄，真正逻辑在别的文件夹）
-
-| 文件 | 对应你敲的命令 | 实际干活的地方 |
-|------|----------------|----------------|
-| `run_cmd_vel_safety_gate.py` | `ros2 run mppi_navigation safety_gate` | → `safety/` |
-| `run_follow_path_client.py` | `ros2 run mppi_navigation follow_path` | → `path_following/` |
-| `run_cancel_navigation.py` | `ros2 run mppi_navigation cancel_navigation` | → `cancel_client.py` |
-| `run_idle_cmd_vel_check.py` | `ros2 run mppi_navigation idle_check` | → `preflight/`（空闲时速度该为 0） |
-| `run_reset_rplidar.py` | `ros2 run mppi_navigation reset_rplidar` | → `tools/reset_rplidar.py` |
-
-把这里理解成「遥控器按键」即可，不必逐行读。
-
-#### path_following/ —— 模式 2：跟固定测试路径
-
-> 模式 1 = RViz 点目标；模式 2 = 事先画好一条线（yaml），让车去跟（方便重复测直线、转弯）。
-
-| 文件 | 作用 |
-|------|--------------|
-| `generators.py` | **画考题路线**：直线、左/右转 90°、S 弯等（只有位置和朝向，没有速度） |
-| `path_io.py` | 路径文件的读和写（yaml） |
-| `follow_path_client.py` | **发任务**：读 yaml → 变到地图坐标 → 告诉 Nav2「跟这条路」；速度仍由 MPPI 在线算 |
-| `cancel_client.py` | **取消当前导航**（取消后安全闸超时会置零停车） |
-
-#### cmd_vel_pipeline/ —— 速度话题名字（给代码用的常量）
-
-| 文件 | 作用 |
-|------|--------------|
-| `topic_names.py` | 把 `/cmd_vel`、`/scan` 等名字写成常量，避免代码里写错字符串 |
-| `remap_chain.py` | 说明速度怎么改名串起来：MPPI → 平滑器 → 安全闸 → 底盘 |
-
-#### mppi_controller/ —— MPPI 调参时的「说明书式」代码
-
-| 文件 | 作用 |
-|------|--------------|
-| `baseline_params.py` | 和 yaml 里基线参数一一对应，改参时方便对照 |
-| `critics_reference.py` | **文字说明** 8 个评分项（critic）各管什么；不是运行中的控制器本身 |
-
-#### localization/ —— 坐标系名字与是否就绪
-
-| 文件 | 作用 |
-|------|--------------|
-| `tf_frame_names.py` | `map` / `odom` / `base_link` 等名字常量 |
-| `readiness_checks.py` | 查 TF 链通不通（给预检等调用） |
-
-#### tools/
-
-| 文件 | 作用 |
-|------|--------------|
-| `reset_rplidar.py` | 给雷达发串口复位命令；雷达报 internal error 时用（不必断电） |
-
-#### preflight/ —— 启动后、发目标前的自动检查
-
-| 文件 | 作用 |
-|------|--------------|
-| `topic_health_check.py` | 听几秒：关键话题有没有在发（雷达、IMU、轮速、EKF…） |
-| `tf_tree_check.py` | 查 `map→odom→base_link` 断没断 |
-| `idle_cmd_vel_check.py` | 空闲时 `/cmd_vel` 必须一直是 0（测试「没目标不该自己跑」） |
-
-日常请用 `scripts/preflight_check_*.sh` 或 `ros2 run … idle_check`，不必直接记模块路径。
-
-#### bag_analysis/ —— 录完包之后算成绩、出图
-
-| 文件 | 作用 |
-|------|--------------|
-| `load_rosbag.py` | 把 rosbag 读成时间序列数据 |
-| `path_tracking_metrics.py` | 算「偏航多远」（路径横向误差） |
-| `heading_error_metrics.py` | 算「朝向偏多少」 |
-| `velocity_smoothness_metrics.py` | 算速度是否抖（加速度、jerk） |
-| `controller_timing_metrics.py` | 算控制频率够不够、有没有丢帧 |
-| `generate_plots.py` | 画出轨迹、速度、误差等图 |
-
-入口一般是：`python3 scripts/analyze_navigation_bag.py <包路径>`。
-
-#### launch_config/ —— launch 用的路径小工具
-
-| 文件 | 作用 |
-|------|--------------|
-| `package_share_paths.py` | 找到本包装好的 config/launch/rviz 路径 |
-| `common_launch_args.py` | 公共启动参数（提醒布尔值要写 `True`/`False`） |
-
----
-
-### scripts/（给你直接敲的辅助脚本）
-
-| 文件 | 作用 |
-|------|--------------|
-| `preflight_check_topics.sh` | 一键查关键话题有没有数据 |
-| `preflight_check_tf.sh` | 一键查 TF 链 |
-| `record_navigation_test.sh` | 按清单录包到 `~/RoboGait_ws/bags/` |
-| `analyze_navigation_bag.py` | 分析一个 bag → 指标文件 + 图 |
-| `generate_test_paths.py` | 重新生成 `paths/` 里 5 条测试路线 |
-| `reset_rplidar.py` | 雷达软件复位（也可用 `ros2 run mppi_navigation reset_rplidar`） |
-
----
-
-### paths/（模式 2 的测试路线，装进包里）
-
-| 文件 | 作用 |
-|------|--------------|
-| `straight.yaml` | 直线约 3 m |
-| `left_90.yaml` | 前进 + 左转 90° + 再前进 |
-| `right_90.yaml` | 同上，右转 |
-| `s_curve.yaml` | S 弯 |
-| `obstacle_avoid.yaml` | 直线（路上可摆实物障碍做避障测） |
-
----
-
-### maps/（地图）
-
-| 文件 | 作用 |
-|------|--------------|
-| `lab2_new.yaml` + `lab2_new.pgm` | **默认实验室地图**（AMCL / map_server 用） |
-| `lab2_new.posegraph` + `lab2_new.data` | 同一张图的 slam_toolbox 格式；当前导航默认路径**还没用上** |
-
----
-
-### 其它（包安装与文档）
-
-| 文件 | 作用 |
-|------|--------------|
-| `package.xml` | 包叫什么、依赖哪些 ROS 包 |
-| `setup.py` / `setup.cfg` | 怎么安装，以及注册 `ros2 run` 那几个命令名 |
-| `rviz/rviz_goal_navigation.rviz` | RViz 打开时用哪套显示配置 |
-| `README.md` | 包的使用说明（英文/摘要向） |
-| `test/test_safety.py` | 自动测安全闸逻辑对不对 |
-| `test/test_path_following.py` | 自动测路径生成/读写对不对 |
-
-### 工作空间级
-
-| 项 | 作用 |
-|----|--------------|
-| `.vscode/settings.json` | 本工作区打开 `.md` 默认进预览 |
-| `PROJECT_CHANGES.md` | 中文项目手册（本文件） |
-| `PROJECT_CHANGES_EN.md` | 英文项目手册（与本文件同步维护） |
-| `README.md` | GitHub / 仓库入口说明（英文摘要） |
-| `.gitignore` | 忽略 build/install/log/bags 等，不上传编译产物 |
-| `TEST_PLAN.md` | 实机验收清单（英文）：阶段 A/B + 测试 T1–T8 |
-| `src/mppi_navigation/README.md` | 包说明（英文） |
-| `src/navigation2/` | Nav2 源码（要改 MPPI critic 等时才深入） |
-| `ARCHITECTURE.html` | 可选备份；结构以本文件第一节为准 |
-
----
-
-## 四、常用命令手册
-
-> 所有命令的前提：先在该终端执行环境准备（见 4.1）。布尔 launch 参数必须写 `True`/`False`（首字母大写）。
-
-### 4.1 环境准备（每个新终端都要执行）
+每个新终端先执行：
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash   # 加载 ROS 2 Humble 系统环境
-source install/setup.bash           # 加载本工作空间（mppi_navigation、nav2 源码版等）
+source /opt/ros/humble/setup.bash && source install/setup.bash
 ```
 
-不 source 会报 `Package 'mppi_navigation' not found`。
+布尔参数必须写成 `True` / `False`（首字母大写）。
 
-### 4.2 编译
+### 文件夹命名约定（全工作空间统一）
 
-```bash
-colcon build --packages-select mppi_navigation --symlink-install
-```
+| 文件夹名 | 只放什么 | 不要放什么 |
+|----------|----------|------------|
+| **`launch/`** | `ros2 launch` **入口** `*.launch.py` | 节点源码、yaml 参数 |
+| **`launch/parts/`** | 被入口拼装的**片段**（大栈才用） | 日常入口；Mode B 可不用 |
+| **`config/`** | 参数 `*.yaml` | 路径几何、地图图片 |
+| **`maps/`** | 地图 yaml/pgm | 轨迹路径 |
+| **`paths/`** | 内置考试路径几何 | 手动录制文件 |
+| **`recorded/`** | 手动录的轨迹 | 内置考试路径 |
+| **`scripts/`** | 离线脚本（`python3 scripts/...`） | `ros2 run` 节点 |
+| **`test/`** | 单元测试 | 实机 launch |
+| **`<pkg>/nodes/`** | **只有** `ros2 run` 的节点 | 库函数、launch |
+| **`<pkg>/lib/`** | 共享库（读 yaml、生成路径等） | 节点入口 |
+| **`<pkg>/safety/`** | 安全闸业务逻辑 | 其它功能 |
 
-- `--packages-select`：只编译本包，几秒完成（不加则重编全部 50+ 包）
-- `--symlink-install`：yaml/launch 用软链接安装，改配置文件后**不用重新编译**，重启 launch 即生效
+> 记法：**看文件夹名就知道文件类型**。节点 → `nodes/`；库 → `lib/`；启动 → `launch/`；参数 → `config/`。
 
-### 4.3 模式 1 启动（RViz 目标导航）
+---
 
-```bash
-# 默认启动：硬件 + EKF + Nav2 全栈 + 安全闸 + RViz + AMCL（lab2_new 地图）
-# 启动后在 RViz 用「2D Pose Estimate」校正初始位姿，再用「Nav2 Goal」发目标
-ros2 launch mppi_navigation rviz_goal_navigation.launch.py
+## 二、包 `robot_mppi_navigation`（导航栈）
 
-# 在线 SLAM：slam_toolbox 边走边建图（无需已有地图；会覆盖 AMCL）
-ros2 launch mppi_navigation rviz_goal_navigation.launch.py slam:=True
+目录：`src/robot_mppi_navigation/`。
 
-# 仅验证软件链路、不要真实定位时，关掉 AMCL（退回静态 map→odom）
-ros2 launch mppi_navigation rviz_goal_navigation.launch.py amcl:=False
+### 2.1 这个包干什么
 
-# 不开 RViz（机器人上无显示器/远程跑时）
-ros2 launch mppi_navigation rviz_goal_navigation.launch.py use_rviz:=False
-```
+| 做 | 不做 |
+|----|------|
+| 开硬件、定位、Nav2、**MPPI**、平滑、安全闸 | **模式 2**（录/跟路径）— 那是另一个独立包 |
+| 预检、录诊断 bag、雷达复位 | 不给 `robot_simple_commander` 当依赖 |
 
-`slam:=False` 时 map_server 默认加载本包 `maps/lab2_new.yaml`（实验室地图）；
-换图用 `map:=/绝对路径/其它地图.yaml` 覆盖（注意 yaml 和 pgm 要在同一目录）。
-
-一条命令内部依次拉起：`rover_mini_hardware.launch.py`（底盘 CAN 驱动 + URDF + 雷达 + IMU）
-→ EKF → 定位（三选一）→ Nav2 各节点（含 MPPI）→ velocity_smoother → safety_gate → 可选 RViz。
-发目标：RViz 工具栏「Nav2 Goal / 2D Goal Pose」在地图上点目标点。
-
-### 4.4 模式 2 启动（预定义路径）
-
-先按 4.3 把全栈跑起来，再在**另一个终端**发送路径：
+日常一键：
 
 ```bash
-# path_name 从内置 5 条测试路径里选：straight / left_90 / right_90 / s_curve / obstacle_avoid
-ros2 launch mppi_navigation follow_predefined_path.launch.py path_name:=left_90
-
-# 或用自定义路径文件（yaml 格式见 paths/ 里任意一个）
-ros2 launch mppi_navigation follow_predefined_path.launch.py path_file:=/绝对路径/my_path.yaml
-
-# 等价的 ros2 run 写法：
-ros2 run mppi_navigation follow_path --ros-args -p path_file:=/绝对路径/my_path.yaml
-```
-
-路径 yaml 只存几何（x, y, yaw），速度全部由 MPPI 在线计算；`frame: local` 的路径会
-以机器人**当前位姿**为起点自动变换到 map 系。下发的路径同时发布在 `/predefined_path`
-（RViz 加个 Path 显示即可看到）。跑完日志显示 `status 4` 表示成功（SUCCEEDED）。
-
-### 4.5 停止 / 急停
-
-```bash
-# 取消当前导航目标（NavigateToPose 和 FollowPath 全部取消；安全闸 0.5s 内置零停车）
-ros2 run mppi_navigation cancel_navigation
-
-# 软件急停：安全闸立即输出零速（导航目标还在，但轮子不动）
-ros2 topic pub -1 /safety_estop std_msgs/msg/Bool "{data: true}"
-# 解除急停：
-ros2 topic pub -1 /safety_estop std_msgs/msg/Bool "{data: false}"
-```
-
-### 4.6 预检（启动全栈后、发目标前）
-
-```bash
-cd ~/RoboGait_ws/src/mppi_navigation
-
-./scripts/preflight_check_topics.sh    # /scan /imu/data /odometry/wheels /odometry/filtered 是否有数据
-./scripts/preflight_check_tf.sh        # TF 链 map→odom→base_link 是否完整
-
-# 测试 1（系统空闲）：10 秒内 /cmd_vel 必须保持零
-ros2 run mppi_navigation idle_check 10
-# 或: python3 -m mppi_navigation.preflight.idle_cmd_vel_check 10
-```
-
-三个检查 exit code 0 = 通过，非 0 = 失败（终端会打印具体缺什么）。
-
-**预检输出怎么读：**
-
-| 标记 | 含义 |
-|------|------|
-| `[OK]` | 检查窗口内收到该话题 / TF 可查 |
-| `[FAIL]` | 必需项缺失（如传感器、EKF、或缺 TF） |
-| `[----] ... (optional)` | 可选项未出现也正常（如尚未导航时 `/cmd_vel*` 不发） |
-
-`[FAIL] /map` 常见于 map_server **只发一次** OccupancyGrid，预检几秒内没听到。用下面确认实际有没有图：
-
-```bash
-ros2 topic echo /map --once    # 能打印地图数据即可；TF 的 map→odom 若已 OK，多半可忽略预检误报
-```
-
-### 4.7 录包与分析
-
-```bash
-cd ~/RoboGait_ws/src/mppi_navigation
-
-# 按 diagnostic_recording_topics.yaml 的话题清单录包，保存到 ~/RoboGait_ws/bags/<名字>
-./scripts/record_navigation_test.sh straight_run1     # Ctrl+C 结束录制
-
-# 分析：输出 metrics.json（路径误差/航向误差/平滑度/控制频率）+ 5 张图
-python3 scripts/analyze_navigation_bag.py ~/RoboGait_ws/bags/straight_run1
-```
-
-### 4.8 传感器 / 硬件逐项检查（开机或重插线后）
-
-推荐顺序：**设备层 → 拉起 can0 → 只起硬件 → 逐话题测频率**。不要在 USB/CAN 未稳定时就起全栈。
-
-```bash
-source /opt/ros/humble/setup.bash && source ~/RoboGait_ws/install/setup.bash
-
-# ---------- 0) 设备是否在 ----------
-ls -l /dev/rplidar /dev/bno055     # 应指向 /dev/ttyUSBx（重启后编号可能变，软链接会更新）
-ip link show can0                  # 接口存在；还须 state UP（见下一步）
-
-# ---------- 1) 拉起 can0（重启后常为 DOWN，不会自动 up）----------
-# 未 up 时驱动会：Connected to can0 → 随即 FATAL data is stale（这是底盘问题，不是雷达/IMU）
-sudo ip link set can0 type can bitrate 500000
-sudo ip link set can0 up
-ip link show can0                  # 应为 state UP
-candump -n 10 -T 3000 can0         # 应看到帧；全空或 Network is down → 查车电 / CAN 线 / USB2CAN
-
-# ---------- 2) 只起硬件（不必先起导航）----------
-ros2 launch mppi_navigation rover_mini_hardware.launch.py
-
-# ---------- 3) 测频率（Humble：ros2 topic hz 一次只能一个话题）----------
-ros2 topic hz /scan                # 正常 ~10 Hz
-ros2 topic hz /imu/data            # 正常 ~50–60 Hz
-ros2 topic hz /odometry/wheels     # 正常 ~15–30 Hz
-
-# 一行串测（各约 3 秒）：
-timeout 3 ros2 topic hz /scan; timeout 3 ros2 topic hz /imu/data; timeout 3 ros2 topic hz /odometry/wheels
-```
-
-| 传感器 | 设备 | 话题 | 正常频率 |
-|--------|------|------|----------|
-| 雷达 RPLidar | `/dev/rplidar` | `/scan` | ~10 Hz |
-| IMU BNO055 | `/dev/bno055` | `/imu/data` | ~50–60 Hz |
-| 底盘 | `can0` UP | `/odometry/wheels` | ~15–30 Hz |
-| EKF（全栈后） | — | `/odometry/filtered` | 有稳定输出 |
-
-**机器人重启 / USB 重枚举后：** 先 Ctrl+C 停掉旧 launch，再执行上面 0→1→2。旧节点会占着失效串口句柄，IMU 狂刷 `Errno 5 Input/output error`，雷达进程也可能已挂掉却仍显示半残节点列表。
-
-### 4.9 硬件排障命令
-
-```bash
-# 雷达 internal error（health status 2）时：软件复位，不用断电
-ros2 run mppi_navigation reset_rplidar
-# 等价：python3 scripts/reset_rplidar.py
-# 原理：向串口发 SLAMTEC 协议 RESET（A5 40）；复位后等 2~3 秒再**重新**启动驱动/launch
-
-# 底盘 FATAL「Did not receive any data ... stale」
-# → 查 can0 是否 UP、candump 有无帧、车是否上电；偶发可停掉 launch 再启一次
-
-# IMU TransmissionException / Errno 5
-# → USB 重插或机器人重启后旧 bno055 节点未退出；停干净后重 launch
-```
-
-### 4.10 常用诊断命令
-
-```bash
-ros2 topic hz /scan                    # 雷达应 ~10 Hz（一次一个话题）
-ros2 topic hz /imu/data               # IMU 应 ~50–60 Hz
-ros2 topic hz /odometry/wheels        # 轮式里程计应 ~15–30 Hz
-ros2 topic hz /odometry/filtered      # EKF 输出（全栈后）
-ros2 topic hz /cmd_vel               # 导航中应 ~20 Hz（MPPI 控制频率）
-
-ros2 topic echo /map --once           # 确认 map_server 已发地图
-ros2 run tf2_ros tf2_echo odom base_link   # EKF 的 odom→base_link
-ros2 run tf2_ros tf2_echo map odom         # AMCL 的 map→odom
-
-ros2 topic list | grep cmd_vel        # 应有 /cmd_vel /cmd_vel_nav /cmd_vel_smoothed 三个
-ros2 topic info /cmd_vel --verbose    # Publisher 必须只有 safety_gate 一个
-ros2 topic echo /cmd_vel_nav          # 看 MPPI 原始输出（排查"机器人不动"从这里开始）
-
-ros2 lifecycle get /bt_navigator      # Nav2 节点状态，应为 active
+ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py
 ```
 
 ---
 
-## 五、已知问题 / 待办
+### 2.2 `launch/` — 启动文件（总开关）
+
+> 小白记法：launch = 「一键开哪些程序」。日常只记顶层那一个。
+
+| 文件 | 是干什么的 | 你什么时候用 / 改 |
+|------|------------|-------------------|
+| **`rviz_goal_navigation.launch.py`** | **顶层一键**：把硬件层 + 导航层 + 可选 RViz 拼在一起 | **每天开车用这个**。改「默认开不开 RViz、默认地图」等顶层参数时看它 |
+| **`nav2_mppi_controller.launch.py`** | 导航「大脑」：EKF、地图/AMCL/SLAM、Nav2（含 **MPPI**）、速度平滑、安全闸；并把 MPPI 的速度改名叫 `cmd_vel_nav` | 一般**不要单独开**（顶层已经 Include）。改速度话题怎么串、生命周期节点列表时看它 |
+| **`rover_mini_hardware.launch.py`** | 只开底盘驱动、雷达、IMU、机器人模型（URDF） | **只测传感器/底盘**时用。改「硬件从哪启动」时看它 |
+| **`ekf_amcl_localization.launch.py`** | 调试用，主要起 EKF | 日常不用 |
+
+顶层常用参数（加在 `rviz_goal_navigation` 后面）：
+
+| 参数 | 意思（人话） |
+|------|----------------|
+| （默认） | 用地图 + AMCL 定位，开 RViz |
+| `amcl:=False` | 不做真定位，只测软件通不通 |
+| `slam:=True` | 边走边建图（暂时不用已有地图） |
+| `use_rviz:=False` | 不开界面 |
+| `map:=/绝对路径/xxx.yaml` | 换一张地图 |
+
+```text
+rviz_goal_navigation          ← 你平时只敲这个
+   ├── rover_mini_hardware    车 + 传感器
+   ├── nav2_mppi_controller   定位 + MPPI + 安全闸
+   └── rviz2（可关）
+```
+
+**坑：** 顶层已经开着时，不要再单独开一遍 `nav2_mppi_controller`，会起两套导航。
+
+---
+
+### 2.3 `config/` — 参数旋钮（改行为优先来这里）
+
+> 小白记法：改「车开多快、怎么避障、定位松紧」→ 改 yaml，**通常不用改 Python**；改完**重启 launch** 即可（用了 `--symlink-install` 时）。
+
+| 文件 | 是干什么的 | 想改什么就打开它 |
+|------|------------|------------------|
+| **`nav2_pure_mppi_params.yaml`** | **最重要**。Nav2 + **MPPI** 全套参数：最大速度、采样数量、8 个评分项（critic）权重、代价地图、AMCL、平滑器、安全闸超时等。里面 `FollowPath` 的 `plugin` 指向 `nav2_mppi_controller::MPPIController` | 车太快/太慢、转弯晃、贴障碍太近、到点不正、控制频率……**先改这个文件** |
+| **`robot_localization_ekf.yaml`** | 轮速里程计 + IMU 怎么融合成 `/odometry/filtered` | 车在图上「漂」、直线走歪怀疑里程计/IMU 融合时 |
+| **`sensor_topics_frames.yaml`** | 对照表：哪个话题、哪个坐标系叫什么（给人看 + 预检用） | 对不上话题名/坐标系名时查阅；一般**不改也能跑** |
+| **`diagnostic_recording_topics.yaml`** | 录测试 bag 时要录哪些话题 | 想多录/少录一些话题做分析时 |
+
+---
+
+### 2.4 `maps/` — 地图
+
+| 文件 | 是干什么的 | 小白注意 |
+|------|------------|----------|
+| **`lab2_new.yaml`** | 地图说明（分辨率、原点等），给 `map_server` / AMCL 用 | 换地图通常换「一对」yaml+图片 |
+| **`lab2_new.pgm`** | 地图图片（黑白占用栅格） | 必须和 yaml **在同一目录** |
+| **`lab2_new.posegraph`** + **`lab2_new.data`** | slam_toolbox 用的位姿图格式 | **当前默认导航没用上**（现在用 AMCL）；以后接 SLAM 定位才会用 |
+
+---
+
+### 2.5 `rviz/` — 可视化界面配置
+
+| 文件 | 是干什么的 | 想改什么 |
+|------|------------|----------|
+| **`rviz_goal_navigation.rviz`** | 打开 RViz 时显示哪些东西（地图、激光、路径、Nav2 面板、Goal 工具等） | 想默认多显示一条话题、改 Fixed Frame 等，可改这个；也可在 RViz 里改完另存 |
+
+---
+
+### 2.6 `scripts/` — 给你直接敲的脚本
+
+| 文件 | 是干什么的 | 怎么用 |
+|------|------------|--------|
+| **`preflight_check_topics.sh`** | 查雷达、IMU、轮速、EKF 等话题有没有数据 | 栈起来后、发目标前跑一遍 |
+| **`preflight_check_tf.sh`** | 查 `map→odom→base_link` 坐标变换通不通 | 车在图上不动/乱跳时先查 |
+| **`record_navigation_test.sh`** | 按 `diagnostic_recording_topics.yaml` 录 rosbag | `./scripts/record_navigation_test.sh 测试名`，Ctrl+C 结束 |
+| **`analyze_navigation_bag.py`** | 读 bag，算误差/平滑度/频率并出图 | `python3 scripts/analyze_navigation_bag.py ~/RoboGait_ws/bags/某目录` |
+| **`reset_rplidar.py`** | 给雷达发串口复位（health 报错时） | 也可用 `ros2 run robot_mppi_navigation reset_rplidar` |
+
+---
+
+### 2.7 Python 源码 `robot_mppi_navigation/`（按文件夹）
+
+> `__init__.py`：只是告诉 Python「这是一个包」，**不用改**。下面不逐个解释。
+
+#### `nodes/` — 命令行入口（很薄）
+
+> 小白记法：这里像「遥控器按键」，真正逻辑在别的文件夹。
+
+| 文件 | 对应命令 | 真正干活的地方 |
+|------|----------|----------------|
+| `run_cmd_vel_safety_gate.py` | `ros2 run robot_mppi_navigation safety_gate` | → `safety/` |
+| `run_idle_cmd_vel_check.py` | `ros2 run robot_mppi_navigation idle_check` | → `preflight/` |
+| `run_reset_rplidar.py` | `ros2 run robot_mppi_navigation reset_rplidar` | → `tools/` |
+
+#### `safety/` — 发给轮子前的最后一道闸
+
+> 规矩：**只能原样放行，或改成全零**。不会自己另算一条速度去开。
+
+| 文件 | 是干什么的 | 想改什么就动它 |
+|------|------------|----------------|
+| **`cmd_vel_safety_gate.py`** | 安全闸**节点本体**：听平滑后的速度 + 里程计 + 急停话题；决定发给底盘还是发 0；导航程序挂了也会补发 0 停车 | 改输入/输出话题名、检查频率等（参数也在 launch/yaml 里） |
+| **`stop_conditions.py`** | 定义「什么情况必须停」：指令太久没来、里程计太久没来、按下软件急停 | 改超时时间逻辑、加新的停条件 |
+| **`pass_or_zero_policy.py`** | 把上面的条件变成两种决定：PASS（放行）或 ZERO（置零） | 改「多种条件怎么组合」的策略 |
+| **`twist_copy.py`** | 小工具：复制速度消息、造一个全零速度、判断是不是零 | 一般不用改 |
+
+软件急停（不关导航程序，只让闸门输出 0）：
+
+```bash
+ros2 topic pub -1 /safety_estop std_msgs/msg/Bool "{data: true}"   # 停
+ros2 topic pub -1 /safety_estop std_msgs/msg/Bool "{data: false}"  # 解除
+```
+
+#### `preflight/` — 开车前自动检查
+
+| 文件 | 是干什么的 | 想改什么 |
+|------|------------|----------|
+| **`topic_health_check.py`** | 听几秒：关键话题有没有在发 | 要检查的话题列表、超时时间 |
+| **`tf_tree_check.py`** | 查坐标变换树断没断 | 要检查的 frame 链 |
+| **`idle_cmd_vel_check.py`** | 没发目标时，`/cmd_vel` 必须一直是 0 | 检查时长、判定阈值 |
+
+日常请用 `scripts/preflight_check_*.sh`，不必直接 `python3` 跑这些模块。
+
+#### `bag_analysis/` — 录完包算成绩
+
+| 文件 | 是干什么的 | 想改什么 |
+|------|------------|----------|
+| **`load_rosbag.py`** | 把 rosbag 读成时间序列 | 支持的话题/消息类型 |
+| **`path_tracking_metrics.py`** | 算离路径偏了多远（横向误差） | 误差算法、合格阈值 |
+| **`heading_error_metrics.py`** | 算朝向偏了多少 | 同上 |
+| **`velocity_smoothness_metrics.py`** | 算速度抖不抖（加速度、jerk） | 同上 |
+| **`controller_timing_metrics.py`** | 算控制频率够不够、有没有丢帧 | 目标频率等 |
+| **`generate_plots.py`** | 画出轨迹、速度、误差图 | 出哪些图、样式 |
+
+入口一般是 `scripts/analyze_navigation_bag.py`，它会调用上面这些。
+
+#### `cmd_vel_pipeline/` — 速度话题名字说明
+
+| 文件 | 是干什么的 | 想改什么 |
+|------|------------|----------|
+| **`topic_names.py`** | 把 `/cmd_vel`、`/cmd_vel_nav` 等写成常量，避免写错字符串 | 若全局改话题名，常量与 launch remap 要一起改 |
+| **`remap_chain.py`** | **说明书式代码**：写明 MPPI → 平滑器 → 安全闸 → 底盘 怎么改名串起来 | 改链路设计时对照；真正 remap 在 `nav2_mppi_controller.launch.py` |
+
+#### `mppi_controller/` — 调 MPPI 时的「说明书」（不是控制器本身）
+
+> 真正跑的 MPPI 在 `src/navigation2/nav2_mppi_controller/`，参数在 `nav2_pure_mppi_params.yaml`。
+
+| 文件 | 是干什么的 | 想改什么 |
+|------|------------|----------|
+| **`baseline_params.py`** | 和 yaml 里基线数字对照的一份 Python 表，方便文档/测试引用 | 改基线时与 yaml **一起改**，别只改一边 |
+| **`critics_reference.py`** | 用文字说明 8 个 critic（障碍、跟路径、朝向……）各管什么、权重大致作用、调坏了会怎样 | 学习调参；改权重仍以 yaml 为准 |
+
+#### `localization/` — 坐标系名字
+
+| 文件 | 是干什么的 | 想改什么 |
+|------|------------|----------|
+| **`tf_frame_names.py`** | `map` / `odom` / `base_link` 等名字常量 | 若项目改坐标系命名 |
+| **`readiness_checks.py`** | 查 TF 是否就绪（给预检等调用） | 就绪条件 |
+
+#### `launch_config/` — launch 用的小工具
+
+| 文件 | 是干什么的 | 想改什么 |
+|------|------------|----------|
+| **`package_share_paths.py`** | 找到本包装好的 config/launch/rviz 路径 | 一般不用改 |
+| **`common_launch_args.py`** | 公共启动参数约定（如布尔写法提醒） | 加公共参数时 |
+
+#### `tools/`
+
+| 文件 | 是干什么的 | 想改什么 |
+|------|------------|----------|
+| **`reset_rplidar.py`** | 雷达串口复位实现 | 串口设备名、复位命令 |
+
+---
+
+### 2.8 包安装相关文件
+
+| 文件 | 是干什么的 | 小白要不要动 |
+|------|------------|--------------|
+| **`package.xml`** | 包名、依赖哪些 ROS 包 | 加依赖时改 |
+| **`setup.py`** | 安装方式、注册 `ros2 run` 有哪些命令 | 新增可执行入口时改 |
+| **`setup.cfg`** | 安装脚本路径等 | 一般不动 |
+| **`README.md`** | 本包英文说明 | 可同步更新 |
+| **`test/test_safety.py`** | 自动测安全闸逻辑 | 改安全闸后跑测试 |
+
+---
+
+### 2.9 本包：想改什么 → 去哪（速查）
+
+| 我想… | 去哪个文件 |
+|-------|------------|
+| 车更快/更慢、转弯、避障松紧 | `config/nav2_pure_mppi_params.yaml` |
+| 换实验室地图 | `maps/` + 启动时 `map:=` |
+| 里程计和 IMU 融合不对 | `config/robot_localization_ekf.yaml` |
+| 急停逻辑 / 超时停车 | `robot_mppi_navigation/safety/` |
+| 启动时多开/少开节点 | `launch/` |
+| RViz 默认显示 | `rviz/rviz_goal_navigation.rviz` |
+| 改 MPPI 算法源码本身 | `src/navigation2/nav2_mppi_controller/`（进阶） |
+
+### 2.10 本包常用命令
+
+```bash
+colcon build --packages-select robot_mppi_navigation --symlink-install
+source install/setup.bash
+
+ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py
+ros2 launch robot_mppi_navigation rover_mini_hardware.launch.py
+
+cd ~/RoboGait_ws/src/robot_mppi_navigation
+./scripts/preflight_check_topics.sh
+./scripts/preflight_check_tf.sh
+ros2 run robot_mppi_navigation idle_check 10
+ros2 run robot_mppi_navigation reset_rplidar
+```
+
+---
+
+## 三、包 `robot_simple_commander`（录路径 / 跟路径）
+
+目录：`src/robot_simple_commander/`。
+
+### 3.1 这个包干什么（务必读）
+
+| 做 | 不做 |
+|----|------|
+| **自己的**硬件 + 定位 +（跟线时）Nav2/**MPPI** + 安全闸 | 不调用、不依赖 `robot_mppi_navigation` |
+| 键盘遥控时**录**轨迹 yaml | 不算速度数字——跟线时用**本包**拉起的 MPPI |
+| 自动**跟随**录好的 / 内置路径 | 不要和模式 1 同时开两套 Nav2 |
+
+推荐入口（一站式）：
+
+| 场景 | 命令 |
+|------|------|
+| 录轨迹 | `record_trajectory.launch.py` + 另开终端 `teleop_twist_keyboard`，Ctrl+C 保存 |
+| 跟轨迹 | `follow_trajectory.launch.py`（自带 MPPI） |
+
+---
+
+### 3.2 启动文件 vs 节点（分类）
+
+```text
+launch/
+  record_trajectory.launch.py   ← ros2 launch 入口
+  follow_trajectory.launch.py   ← ros2 launch 入口
+  parts/                        ← 片段，只被入口拼装
+recorded/                       ← 你手动录的轨迹 yaml
+paths/                          ← 内置考试路径
+nodes/                          ← ros2 run 节点
+lib/                            ← 库（path_io、generators），不是节点
+safety/                         ← 安全闸逻辑
+```
+
+#### `launch/` — 启动入口
+
+| 文件 | 是干什么的 | 怎么用 |
+|------|------------|--------|
+| **`record_trajectory.launch.py`** | 录轨迹：硬件 + EKF + 地图 TF + 节点 `record_path` | `ros2 launch robot_simple_commander record_trajectory.launch.py` |
+| **`follow_trajectory.launch.py`** | 跟轨迹：硬件 + `parts/nav_stack`（MPPI）+ 节点 `follow_path` | `ros2 launch robot_simple_commander follow_trajectory.launch.py` |
+
+#### `launch/parts/` — 被拼装的片段
+
+| 文件 | 是干什么的 | 怎么用 |
+|------|------------|--------|
+| **`hardware.launch.py`** | 底盘 / 雷达 / IMU | 只被入口 Include |
+| **`nav_stack.launch.py`** | EKF + 定位 + Nav2/MPPI + 平滑 + 本包安全闸 | 只被 follow 入口 Include |
+
+#### 节点（`ros2 run`，不是 launch）
+
+| 命令 | 源码 | 作用 |
+|------|------|------|
+| `ros2 run robot_simple_commander record_path` | `nodes/record_path.py` | 只跑录制节点 |
+| `ros2 run robot_simple_commander follow_path` | `nodes/follow_path.py` | 只跑跟随客户端 |
+| `ros2 run robot_simple_commander cancel_navigation` | `nodes/cancel_task.py` | 取消目标 |
+| `ros2 run robot_simple_commander safety_gate` | `safety/` | 安全闸（一般由 nav_stack 拉起） |
+
+---
+
+### 3.3 Python 源码 `robot_simple_commander/`
+
+> **约定：** 能 `ros2 run` 的节点放在 **`nodes/`**；库函数放在 **`lib/`**；安全闸逻辑在 **`safety/`**。
+
+| 文件 | 是干什么的（人话） | 想改什么就动它 |
+|------|--------------------|----------------|
+| **`nodes/record_path.py`** | 一边开，一边按距离采 `map` 里车的位置和朝向；你按 Ctrl+C 时写成 yaml | 默认采样间距、父/子坐标系、保存失败条件 |
+| **`nodes/follow_path.py`** | 读 yaml →（若是 `local` 帧就先变到地图）→ 用 Simple Commander 发 FollowPath → **等 MPPI 把车开过去** | 默认 controller 名、是否 `wait_for_nav2`、反馈打印 |
+| **`nodes/cancel_task.py`** | 告诉 Nav2：把 NavigateToPose / FollowPath 目标都取消 | 要取消的 action 列表 |
+| **`nodes/run_safety_gate.py`** | 安全闸的 `ros2 run` 入口（薄封装） | 一般不用改；逻辑在 `safety/` |
+| **`lib/path_io.py`** | 路径 yaml 的读和写（**不是节点**） | 文件格式字段（会连带跟/录都受影响） |
+| **`lib/generators.py`** | 用数学生成考试路线（**不是节点**） | 测试路径长度、弯道形状 |
+| **`safety/`** | 本包自己的安全闸业务逻辑 | 跟线时 `/cmd_vel` 闸门 |
+
+---
+
+### 3.4 `recorded/` 与 `paths/`
+
+| 文件夹 | 放什么 | 怎么用 |
+|--------|--------|--------|
+| **`recorded/`** | **你手动录的**轨迹（默认 `lab_route.yaml`） | 录制默认写这里；跟线用 `path_file:=…/recorded/….yaml` |
+| **`paths/`** | **内置考试**几何路径 | `path_name:=left_90` 等 |
+
+> 里面只有位置和朝向，**没有速度**。速度永远现场由 MPPI 算。
+
+| `paths/` 文件 | 是干什么的 | 小白怎么用 |
+|------|------------|------------|
+| **`straight.yaml`** | 约 3 m 直线 | `path_name:=straight` |
+| **`left_90.yaml`** | 前进 + 左转 90° + 再前进 | `path_name:=left_90` |
+| **`right_90.yaml`** | 同上，右转 | `path_name:=right_90` |
+| **`s_curve.yaml`** | S 形弯 | `path_name:=s_curve` |
+| **`obstacle_avoid.yaml`** | 直线；可在路上摆箱子测避障 | `path_name:=obstacle_avoid` |
+
+格式示例：
+
+```yaml
+frame: map          # map=地图坐标；local=相对录制/发送时车头
+poses:
+  - {x: 0.0, y: 0.0, yaw: 0.0}
+  - {x: 0.05, y: 0.0, yaw: 0.0}
+```
+
+---
+
+### 3.5 `scripts/` / 安装 / 测试
+
+| 文件 | 是干什么的 | 想改什么 |
+|------|------------|----------|
+| **`scripts/generate_test_paths.py`** | 用 `generators.py` 重新生成 `paths/*.yaml` | 改完 generators 后跑它更新文件 |
+| **`package.xml`** | 包名与依赖（含 `nav2_simple_commander`） | 加依赖 |
+| **`setup.py`** / **`setup.cfg`** | 注册 `record_path` / `follow_path` / `cancel_navigation` | 新增加命令入口 |
+| **`README.md`** | 本包英文说明 | 可同步更新 |
+| **`test/test_path_io.py`** | 自动测路径生成和 yaml 读写 | 改 path_io/generators 后跑测试 |
+
+---
+
+### 3.6 本包：想改什么 → 去哪（速查）
+
+| 我想… | 去哪个文件 |
+|-------|------------|
+| 录密一点 / 稀一点 | `nodes/record_path.py` 的 `min_separation`，或 launch 参数 |
+| 跟线逻辑、等不等 Nav2 | `nodes/follow_path.py` |
+| 换内置考试路线形状 | `generators.py` → 再跑 `generate_test_paths.py` |
+| 手改一条路径点 | 直接编辑 `paths/*.yaml` 或你的录制文件 |
+| 取消键行为 | `nodes/cancel_task.py` |
+| 车跟线时快慢/晃（控制） | 本包 `config/nav2_mppi_params.yaml`（跟 `robot_mppi_navigation` 无关） |
+
+### 3.7 本包常用命令（与 robot_mppi_navigation 无关）
+
+```bash
+colcon build --packages-select robot_simple_commander --symlink-install
+source install/setup.bash
+
+# ——— 录制（手动开车；默认写入包内 recorded/lab_route.yaml）———
+# 终端 A
+ros2 launch robot_simple_commander record_trajectory.launch.py
+# 终端 B
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
+# 开完车 → 终端 A 按 Ctrl+C 保存
+
+# ——— 跟随刚录的 ———
+REC=$(ros2 pkg prefix robot_simple_commander)/share/robot_simple_commander/recorded/lab_route.yaml
+ros2 launch robot_simple_commander follow_trajectory.launch.py path_file:=$REC
+
+# ——— 跟随内置考试路径 ———
+ros2 launch robot_simple_commander follow_trajectory.launch.py path_name:=left_90
+ros2 run robot_simple_commander cancel_navigation
+```
+
+---
+
+## 四、模式 B 包（Python，跟人）
+
+> 逻辑参考 `~/rover_workspace`，**全部用 Python 重写**，不迁移 C++。  
+> 依赖外部：`orbbec_person_publisher`（Nuitrack）、`dynamixel_sdk`。
+
+### 4.1 `robogait_person_interfaces`
+
+| 文件 | 作用 |
+|------|------|
+| **`msg/User.msg`** | `detection` + `x/y/z`（相机坐标系，z=距离） |
+
+### 4.2 `robogait_perception`
+
+| 节点 / 文件 | 作用 | 命令 |
+|-------------|------|------|
+| **`nodes/distance_orbbec.py`** | 订阅 `/orbbec/*` → 发布 `user_raw`、`person_center_pixel` | `ros2 run robogait_perception distance_orbbec` |
+| **`config/perception.yaml`** | 话题名、超时、hold | 改 Orbbec 话题时动它 |
+
+### 4.3 `robogait_gimbal`（云台）
+
+| 节点 / 文件 | 作用 | 命令 |
+|-------------|------|------|
+| **`nodes/camera_tracker.py`** | 像素偏差 PID → `camera_position`（度） | `ros2 run robogait_gimbal camera_tracker` |
+| **`nodes/dynamixel_driver.py`** | 角度 → XL430 位置 | `ros2 run robogait_gimbal dynamixel_driver` |
+| **`config/gimbal.yaml`** | 串口、角度限位、PID | **改舵机设备路径动它** |
+| **`test_gimbal.launch.py`** | B0：只测云台+感知（不起底盘 Nav2） | `ros2 launch robogait_gimbal test_gimbal.launch.py` |
+
+### 4.4 `robogait_person_follow`
+
+| 节点 / 文件 | 作用 | 命令 |
+|-------------|------|------|
+| **`nodes/distance_filter.py`** | `user_raw` → `user_coordinates`（平滑） | `ros2 run robogait_person_follow distance_filter` |
+| **`nodes/person_nav_goal.py`** | 人坐标 → 保持间距的 `NavigateToPose`（MPPI 算完整 `[v,ω]`） | `ros2 run robogait_person_follow person_nav_goal` |
+| **`person_follow.launch.py`** | B1 一站：A1 Nav2/MPPI + 人层 | 见下 |
+| **`person_layer.launch.py`** | B2 终端 2：叠在已起的 Nav2 上 | 见下 |
+| **`config/person_follow.yaml`** | 目标间距、死区、目标更新频率 | **调跟人距离动它** |
+
+**控制链（跟人 = 纯 MPPI）：**
+
+```text
+人检测 → distance_filter → person_nav_goal → NavigateToPose
+                                              ↓
+                                     规划器 → MPPI → 平滑 → safety_gate → /cmd_vel
+```
+
+人**不**改 `/cmd_vel`。已删除旧的 `cmd_vel_blend` / `straight_follow`（PID 混控）。
+
+**常用命令：**
+
+```bash
+# B0 只测云台
+ros2 launch robogait_gimbal test_gimbal.launch.py device_name:=/dev/ttyUSB0
+
+# B1 一站跟人（Nav2 + MPPI + 人→目标）
+ros2 launch robogait_person_follow person_follow.launch.py
+
+# B2 终端1 Nav2 + 终端2 人层
+ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py
+ros2 launch robogait_person_follow person_layer.launch.py
+```
+
+---
+
+## 五、工作空间其它文件
+
+| 文件 / 目录 | 是干什么的 | 小白怎么用 |
+|-------------|------------|------------|
+| **`PROJECT_CHANGES.md`** | 本中文手册 | 查「文件干什么、去哪改」 |
+| **`PROJECT_CHANGES_EN.md`** | 英文手册（与中文对齐） | 给英文读者 |
+| **`TEST_PLAN.md`** | 实机验收（中文）：准备 0/1 → T1–T8 → B0/B1/B2 | **上机按它做**；先 B0 云台再跟人 |
+| **`NODES_AND_TOPICS.md`** | 节点↔话题订阅关系图（模式 A/B） | 搞不清谁订谁发时看它 |
+| **`README.md`** | 仓库首页简介 | GitHub / 新人入口 |
+| **`src/robot_mppi_navigation/README.md`** | 栈包英文说明 | 与第二节互补 |
+| **`src/robot_simple_commander/README.md`** | 任务包英文说明 | 与第三节互补 |
+| **`src/robogait_perception/README.md`** | Mode B 感知骨架说明 | 第四节 |
+| **`src/robogait_gimbal/README.md`** | Mode B 云台骨架说明 | 第四节 |
+| **`src/robogait_person_follow/README.md`** | Mode B 跟人骨架说明 | 第四节 |
+| **`src/navigation2/`** | 整份 Nav2 源码（含 MPPI 实现） | **进阶**：改控制器算法、critic 实现 |
+| **`.vscode/settings.json`** | 打开 md 默认预览 | 可不管 |
+| **`.gitignore`** | 不把 build/install/log 等提交进 git | 可不管 |
+
+---
+
+## 六、待办
 
 | 项 | 状态 |
 |----|------|
-| ~~RPLidar internal error（health status 2）~~ | **已解决（07-21）**：串口 RESET 命令复位，命令见 4.9；开机检查流程见 4.8；若复发可再复位或断电 |
-| ~~BNO055 通信失败（Payload length mismatch）~~ | **已解决（07-21）**：重新接线后正常 |
-| `slam:=True` 在线建图实测 | 硬件已恢复，可以测 |
-| RViz 发 Goal 的完整导航实测（8 项测试协议） | 按 `TEST_PLAN.md`：先 A/B，再 T1→T2→T7，其余按表 |
-| AMCL 定位实测（`amcl:=True`） | 默认已开；待按 TEST_PLAN 阶段 B 勾选观感项 |
-| 模式 2 实测（FollowPath 5 条路径） | 对应 TEST_PLAN **T3–T6** |
-| 完整导航实测（TEST_PLAN 8 项） | 硬件已通；清单已重梳为 A/B + T1–T8，待实机打勾 |
-| slam_toolbox 位姿图定位模式 | `lab2_new.posegraph` 已有，launch 未接（可用 AMCL） |
-| 自定义 critic（M10） | 源码已就绪，未开始 |
-| gazebo_ros_pkgs 未安装 | 需要时 `sudo apt install ros-humble-gazebo-ros-pkgs` |
+| ~~RPLidar health 2~~ | 已解决：`ros2 run robot_mppi_navigation reset_rplidar` |
+| ~~BNO055 通信失败~~ | 已解决（07-21） |
+| `slam:=True` 实测 | 可测 |
+| 按 `TEST_PLAN.md` 实机勾选 | 待做（0/1 → T1–T8 → B0→B1） |
+| 模式 A2 录制 + 跟随实测 | 用第三节命令；对应 T3–T6 |
+| Mode B：`robogait_gimbal` + `test_gimbal` 实机 | 代码已就绪，待测 |
+| Mode B：`person_follow` / `person_layer` 实机（纯 MPPI） | 代码已改，待测 |
+| posegraph 定位接进 launch | 未做（现用 AMCL） |
+| 自定义 MPPI critic | 未开始（在 `navigation2`） |
+| Gazebo 仿真依赖 | 需要时再装 |

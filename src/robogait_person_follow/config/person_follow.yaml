@@ -1,0 +1,16 @@
+distance_filter:
+  ros__parameters:
+    filter_window: 5
+    dropout_frames: 20
+
+person_nav_goal:
+  ros__parameters:
+    target_distance_m: 2.4
+    dead_zone_m: 0.15
+    goal_update_min_m: 0.30
+    goal_update_period_sec: 0.5
+    lost_timeout_sec: 1.2
+    map_frame: map
+    base_frame: base_link
+    action_name: navigate_to_pose
+    goal_topic: person_nav_goal

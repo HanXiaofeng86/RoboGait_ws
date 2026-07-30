@@ -22,5 +22,5 @@ __pycache__/
 *~
 .DS_Store
 
-# Optional: keep Cursor project rules but skip local caches if present
-.cursor/projects/
+# Cursor local (do not commit agent caches / IDE state)
+.cursor/

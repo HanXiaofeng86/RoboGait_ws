@@ -1,0 +1,24 @@
+camera_tracker:
+  ros__parameters:
+    kp: 0.52
+    kd: 0.08
+    ki: 0.0
+    filter_window: 7
+    image_center: 320.0
+    image_width: 640.0
+    hfov_deg: 69.0
+    dead_zone_deg: 2.5
+    dead_zone_outer_deg: 5.0
+
+dynamixel_driver:
+  ros__parameters:
+    device_name: "/dev/ttyUSB0"
+    dxl_id: 1
+    baudrate: 57600
+    min_angle_deg: -80
+    max_angle_deg: 80
+    profile_velocity: 750
+    profile_acceleration: 150
+    dead_zone_deg: 2.5
+    min_goal_change_deg: 1.0
+    center_ticks: -1
