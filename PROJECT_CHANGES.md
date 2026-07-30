@@ -514,7 +514,7 @@ ros2 launch robogait_person_follow person_layer.launch.py
 | **`PROJECT_CHANGES.md`** | 本中文手册 | 查「文件干什么、去哪改」 |
 | **`PROJECT_CHANGES_EN.md`** | 英文手册（与中文对齐） | 给英文读者 |
 | **`TEST_PLAN.md`** | 实机验收（中文）：准备 0/1 → T1–T8 → B0/B1/B2 | **上机按它做**；先 B0 云台再跟人 |
-| **`NODES_AND_TOPICS.md`** | 节点↔话题订阅关系图（模式 A/B） | 搞不清谁订谁发时看它 |
+| **`NODES_AND_TOPICS.md`** | 节点↔话题图（**英文**，对照 launch/源码核对） | 搞不清谁订谁发时看它 |
 | **`README.md`** | 仓库首页简介 | GitHub / 新人入口 |
 | **`src/robot_mppi_navigation/README.md`** | 栈包英文说明 | 与第二节互补 |
 | **`src/robot_simple_commander/README.md`** | 任务包英文说明 | 与第三节互补 |

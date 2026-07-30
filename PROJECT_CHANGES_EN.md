@@ -504,7 +504,7 @@ ros2 launch robogait_person_follow person_layer.launch.py
 | **`PROJECT_CHANGES.md`** | Chinese handbook | “What file / where to edit” |
 | **`PROJECT_CHANGES_EN.md`** | This English handbook | Same |
 | **`TEST_PLAN.md`** | On-robot checklist (**Chinese**): prep 0/1 → T1–T8 → B0/B1/B2 | Follow it; **B0 gimbal before person follow** |
-| **`NODES_AND_TOPICS.md`** | Node↔topic subscription diagrams (Mode A/B) | Who publishes / subscribes what |
+| **`NODES_AND_TOPICS.md`** | Node↔topic diagrams (**English**, verified vs launch/code) | Who publishes / subscribes what |
 | **`README.md`** | Repo landing | First link for newcomers |
 | **`src/robot_mppi_navigation/README.md`** | Stack package README | Complements §2 |
 | **`src/robot_simple_commander/README.md`** | Record/follow README | Complements §3 |

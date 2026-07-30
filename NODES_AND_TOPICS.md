@@ -1,189 +1,255 @@
-# 节点与话题订阅图
+# Nodes and Topics (English)
 
-> 只画本仓库**自研节点**和主链路话题。Nav2 / 驱动等系统节点用 `[系统]` 标出。  
-> 箭头：`发布者 --话题--> 订阅者`
+Verified against current `setup.py` entry points and launch files.  
+Arrows: `publisher --topic--> subscriber`.
+
+**Important:** MPPI is **not** a ROS node. It is a **plugin** loaded by `controller_server`.
 
 ---
 
-## 1. 模式 A1：RViz 点目标（纯 MPPI）
+## 1. Complete inventory of *our* ROS executables
 
-入口：`ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py`
+These are all custom `ros2 run` entry points in this workspace (11 unique names; `safety_gate` exists in two packages):
+
+| Executable (node name) | Package | Role |
+|------------------------|---------|------|
+| `safety_gate` | `robot_mppi_navigation` | Gate: `cmd_vel_smoothed` → `/cmd_vel` |
+| `idle_check` | `robot_mppi_navigation` | Idle `/cmd_vel` checker (tool) |
+| `reset_rplidar` | `robot_mppi_navigation` | Lidar serial RESET (tool) |
+| `record_path` | `robot_simple_commander` | Record map→base_link poses → yaml |
+| `follow_path` | `robot_simple_commander` | Send FollowPath action |
+| `cancel_navigation` | `robot_simple_commander` | Cancel Nav2 goals |
+| `safety_gate` | `robot_simple_commander` | Same gate logic (A2 stack copy) |
+| `distance_orbbec` | `robogait_perception` | Orbbec topics → `user_raw` |
+| `camera_tracker` | `robogait_gimbal` | Pixel error → `camera_position` |
+| `dynamixel_driver` | `robogait_gimbal` | `camera_position` → Dynamixel |
+| `distance_filter` | `robogait_person_follow` | `user_raw` → `user_coordinates` |
+| `person_nav_goal` | `robogait_person_follow` | Person → NavigateToPose |
+
+`robogait_person_interfaces` has **no** nodes (messages only).
+
+Utility nodes `idle_check` / `reset_rplidar` / `cancel_navigation` are **not** in the continuous control graphs below.
+
+---
+
+## 2. Mode A1 — RViz goal (full launch node names)
+
+Launch: `ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py`
+
+### 2.1 Velocity chain (exact names)
 
 ```text
-[RViz / 用户]
-      |  (Nav2 Goal / NavigateToPose action)
-      v
-[系统] bt_navigator / planner_server
-      |
-      |  FollowPath（局部路径）
-      v
-[系统] controller_server (MPPI)
-      |
-      |  /cmd_vel_nav          (Twist)
-      v
-[系统] velocity_smoother
-      |
-      |  /cmd_vel_smoothed     (Twist)
-      v
-[自研] safety_gate
-      |  另订: /odometry/filtered, /safety_estop
-      |
-      |  /cmd_vel              (Twist)
-      v
-[系统] roverrobotics_driver
-      |
-      v
-    底盘轮子
+rviz2  (or other client)
+   |  action: navigate_to_pose
+   v
+bt_navigator
+   |  (asks planner + controller via Nav2 internals)
+   v
+planner_server  ---- global path ---->
+                                          \
+                                           --> controller_server  [plugin: MPPI]
+                                          /
+behavior_server  (recovery also remapped to cmd_vel_nav)
+
+controller_server
+   |  topic: /cmd_vel_nav          (Twist)
+   v
+velocity_smoother
+   |  topic: /cmd_vel_smoothed     (Twist)
+   v
+safety_gate                        [ours]
+   |  also subs: /odometry/filtered, /safety_estop
+   |  topic: /cmd_vel              (Twist)
+   v
+roverrobotics_driver               [external, from mini.launch]
+   |
+   v
+chassis
 ```
 
-传感器 / 定位（给 MPPI 用，不直接进 `/cmd_vel`）：
+### 2.2 Other nodes started with A1 (localization / lifecycle)
+
+Typical names from our launches + `roverrobotics_driver/mini.launch.py`:
 
 ```text
-[系统] rplidar -------- /scan ------------> [系统] amcl / costmap
-[系统] bno055 --------- /imu/data --------> [系统] ekf_filter_node
-[系统] rover 驱动 ----- /odometry/wheels -> [系统] ekf_filter_node
+Hardware / model (via mini.launch):
+  roverrobotics_driver
+  robot_state_publisher
+  joint_state_publisher   (if included by mini)
+  rplidar                 (or similar lidar node name from rplidar_ros)
+  bno055
+
+Localization:
+  ekf_filter_node
+  map_server              (when slam:=False)
+  amcl                    (default)
+  static_map_to_odom      (only if amcl:=False)
+  lifecycle_manager_localization
+
+Navigation lifecycle:
+  smoother_server         (path smoother — not the velocity smoother)
+  waypoint_follower
+  lifecycle_manager_navigation
+
+Optional UI:
+  rviz2
+```
+
+Sensor → localization sketch:
+
+```text
+rplidar -------------- /scan -------------> amcl / costmaps
+bno055 --------------- /imu/data ---------> ekf_filter_node
+roverrobotics_driver - /odometry/wheels --> ekf_filter_node
                                               |
                                               |  /odometry/filtered
-                                              |  TF: map->odom->base_link
+                                              |  TF: odom->base_link
                                               v
-                                         MPPI / safety_gate
+                                         amcl / controller_server / safety_gate
 ```
 
 ---
 
-## 2. 模式 A2：录轨迹 / 跟轨迹
+## 3. Mode A2 — record / follow
 
-### 2.1 录轨迹
-
-入口：`ros2 launch robot_simple_commander record_trajectory.launch.py`
+### 3.1 Record
 
 ```text
-[系统] TF map→base_link
-      |
-      v
-[自研] record_path -------- 写入 yaml（recorded/*.yaml）
+TF: map -> base_link
+        |
+        v
+   record_path ---- writes yaml (no cmd_vel)
 ```
 
-（录制时一般不起 MPPI 跟线；遥控把车开过即可。）
-
-### 2.2 跟轨迹
-
-入口：`ros2 launch robot_simple_commander follow_trajectory.launch.py`
+### 3.2 Follow
 
 ```text
-yaml 路径文件
-      |
-      v
-[自研] follow_path ---- FollowPath action ----> [系统] Nav2 + MPPI
-                                                      |
-                                                      |  之后速度链同 A1：
-                                                      |  cmd_vel_nav → smoothed → safety_gate → /cmd_vel
-                                                      v
-                                                   底盘
+path yaml
+   |
+   v
+follow_path ---- action: follow_path ----> bt_navigator / controller_server (MPPI)
+   |                                         |
+   | topic: /predefined_path (Path, viz)     |  then same velocity chain as A1:
+   v                                         |  cmd_vel_nav -> cmd_vel_smoothed
+ (RViz optional)                             |  -> safety_gate -> /cmd_vel
+```
 
-[自研] cancel_navigation ---- 取消 NavigateToPose / FollowPath
+A2 uses **its own** stack copy (`robot_simple_commander` `safety_gate`), not `robot_mppi_navigation`.
+
+---
+
+## 4. Mode B0 — gimbal only
+
+Launch: `ros2 launch robogait_gimbal test_gimbal.launch.py`
+
+```text
+nuitrack_person_node                    [external: orbbec_person_publisher]
+   |  /orbbec/person_position           (geometry_msgs/Point)
+   |  /orbbec/person_center_pixel       (std_msgs/Int32)
+   |  /orbbec/num_users                 (std_msgs/Int32)
+   v
+distance_orbbec
+   |  /user_raw                         (robogait_person_interfaces/User)
+   |  /person_center_pixel              (std_msgs/Int32)
+   +------------+----------------------+
+   |            |                      |
+   v            v                      |
+distance_filter                        |
+   |  /user_coordinates                |
+   |            |                      |
+   |            v                      |
+   |      camera_tracker <-------------+  (also subs /person_center_pixel)
+   |            |
+   |            |  /camera_position     (std_msgs/Float32, degrees)
+   |            v
+   |      dynamixel_driver <--- also subs /user_raw (lost-person handling)
+   |            |
+   |            v
+   |         Dynamixel servo (camera pan)
+   v
+ (no /cmd_vel — chassis not driven in B0)
 ```
 
 ---
 
-## 3. 模式 B0：只测云台（车不动）
+## 5. Mode B1 / B2 — person follow (pure MPPI)
 
-入口：`ros2 launch robogait_gimbal test_gimbal.launch.py`
+Person supplies a **goal**; chassis `[v, ω]` still comes only from MPPI.
 
 ```text
-[外部] nuitrack_person_node
-      |  /orbbec/person_position      (Point)
-      |  /orbbec/person_center_pixel  (Int32)
-      |  /orbbec/num_users            (Int32)
-      v
-[自研] distance_orbbec
-      |  /user_raw                 (User)
-      |  /person_center_pixel      (Int32)
-      +----------+----------------+
-      |          |
-      v          v
-[自研] distance_filter     [自研] camera_tracker
-      |  /user_coordinates      |  订 /user_coordinates
-      |  (User)                 |  订 /person_center_pixel
-      |                         |
-      |                         |  /camera_position   (Float32, 度)
-      |                         v
-      |                   [自研] dynamixel_driver
-      |                         |  订 /camera_position
-      |                         |  订 /user_raw（丢人时可停）
-      |                         v
-      |                       Dynamixel 舵机（转相机）
-      v
-   （B0 不发 /cmd_vel，底盘不动）
+[same perception + gimbal graph as B0]
+                |
+                |  /user_coordinates
+                v
+         person_nav_goal
+                |
+    +-----------+---------------------------+
+    |                                       |
+    |  /person_nav_goal                     |  action: navigate_to_pose
+    |  (geometry_msgs/PoseStamped, debug)   v
+    v                                 bt_navigator
+ (RViz optional)                            |
+                                            v
+                                  planner_server / controller_server (MPPI)
+                                            |
+                                            |  /cmd_vel_nav
+                                            v
+                                    velocity_smoother
+                                            |
+                                            |  /cmd_vel_smoothed
+                                            v
+                                      safety_gate
+                                            |
+                                            |  /cmd_vel
+                                            v
+                                   roverrobotics_driver
 ```
 
 ---
 
-## 4. 模式 B1 / B2：跟人（人→目标→纯 MPPI）
+## 6. Our nodes — subscribe / publish table
 
-- B1：`ros2 launch robogait_person_follow person_follow.launch.py`（Nav + 人层一起）
-- B2：终端1 起 A1 Nav；终端2 `person_layer.launch.py`
-
-```text
-                    【感知 + 云台】同 B0
-                              |
-                              |  /user_coordinates
-                              v
-                    [自研] person_nav_goal
-                              |
-              +---------------+----------------+
-              |                                |
-              |  /person_nav_goal              |  NavigateToPose action
-              |  (PoseStamped，调试用)          v
-              v                      [系统] bt_navigator
-         (RViz 可看)                          |
-                                              |  规划路径
-                                              v
-                                    [系统] MPPI → smoother → safety_gate → /cmd_vel
-                                              |
-                                              v
-                                           底盘
-
-说明：人只提供目标；[v, ω] 全部由 MPPI 计算，无 PID 改速度。
-```
-
-合并总览（B 叠在 A 上）：
-
-```text
-人/相机 ──> distance_orbbec ──> distance_filter ──> person_nav_goal ──action──> Nav2
-                |                      |
-                |                      +──> camera_tracker ──> dynamixel_driver ──> 舵机
-                +──> (user_raw 也可给舵机看是否丢人)
-
-Nav2/MPPI ──> cmd_vel_nav ──> cmd_vel_smoothed ──> safety_gate ──> /cmd_vel ──> 驱动
-```
+| Node | Subscribes | Publishes / actions |
+|------|------------|---------------------|
+| `safety_gate` | `/cmd_vel_smoothed`, `/odometry/filtered`, `/safety_estop` | `/cmd_vel` |
+| `idle_check` | `/cmd_vel` | — |
+| `reset_rplidar` | — | serial only |
+| `record_path` | TF `map`→`base_link` | yaml file |
+| `follow_path` | — | action `follow_path`; topic `/predefined_path` |
+| `cancel_navigation` | — | cancel Nav2 actions |
+| `distance_orbbec` | `/orbbec/person_position`, `/orbbec/person_center_pixel`, `/orbbec/num_users` | `/user_raw`, `/person_center_pixel` |
+| `distance_filter` | `/user_raw` | `/user_coordinates` |
+| `camera_tracker` | `/user_coordinates`, `/person_center_pixel` | `/camera_position` |
+| `dynamixel_driver` | `/camera_position`, `/user_raw` | (Dynamixel serial) |
+| `person_nav_goal` | `/user_coordinates` | `/person_nav_goal`; action `navigate_to_pose` |
 
 ---
 
-## 5. 自研节点速查表
+## 7. What the previous Chinese diagram got wrong / incomplete
 
-| 节点 | 包 | 主要订阅 | 主要发布 / 动作 |
-|------|-----|----------|-----------------|
-| `safety_gate` | `robot_mppi_navigation`（A2 包也有副本） | `cmd_vel_smoothed`, `odometry/filtered`, `safety_estop` | `/cmd_vel` |
-| `idle_check` | `robot_mppi_navigation` | `/cmd_vel` | （检查用，不控制车） |
-| `reset_rplidar` | `robot_mppi_navigation` | — | 串口复位雷达 |
-| `record_path` | `robot_simple_commander` | TF `map→base_link` | 写 yaml |
-| `follow_path` | `robot_simple_commander` | — | FollowPath **action** |
-| `cancel_navigation` | `robot_simple_commander` | — | 取消导航 **action** |
-| `distance_orbbec` | `robogait_perception` | `/orbbec/*` | `user_raw`, `person_center_pixel` |
-| `distance_filter` | `robogait_person_follow` | `user_raw` | `user_coordinates` |
-| `camera_tracker` | `robogait_gimbal` | `user_coordinates`, `person_center_pixel` | `camera_position` |
-| `dynamixel_driver` | `robogait_gimbal` | `camera_position`, `user_raw` | （串口到舵机） |
-| `person_nav_goal` | `robogait_person_follow` | `user_coordinates` | `person_nav_goal`；NavigateToPose **action** |
+| Issue | Correction |
+|-------|------------|
+| Implied “MPPI” as a node | Use `controller_server` (MPPI is the plugin) |
+| Incomplete A1 node list | Added lifecycle, smoother_server, waypoint_follower, hardware names |
+| `record_path` shown vaguely | It uses **TF**, not odometry topics |
+| Missing `nuitrack_person_node` | External, but started by our B launches |
+| Not listing all 11 executables | Section 1 is the complete custom list |
+
+When A1 is running, `ros2 node list` will show **many more** names (costmap nodes under namespaces, BT internal nodes, etc.). Section 2 lists the **launch-level** names we start; it is not every subprocess name Nav2 may spawn.
 
 ---
 
-## 6. 常用查看命令
+## 8. Quick checks
 
 ```bash
+ros2 pkg executables robot_mppi_navigation
+ros2 pkg executables robot_simple_commander
+ros2 pkg executables robogait_perception
+ros2 pkg executables robogait_gimbal
+ros2 pkg executables robogait_person_follow
+
 ros2 node list
 ros2 topic list
 ros2 topic info /cmd_vel --verbose
-ros2 topic echo /user_coordinates
 ros2 action list
 ```
