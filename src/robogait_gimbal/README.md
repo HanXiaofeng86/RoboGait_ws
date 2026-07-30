@@ -1,13 +1,13 @@
 # robogait_gimbal
 
-**Mode B** — 云台/舵机（不发 `/cmd_vel`）。
+**Mode B** — camera pan gimbal / Dynamixel (does **not** publish `/cmd_vel`).
 
-## 文件夹
+## Layout
 
 ```text
-launch/                 # 入口
+launch/                 # entry
   test_gimbal.launch.py
-config/                 # 串口、PID、角度限位
+config/                 # serial device, PID, angle limits
 robogait_gimbal/
   nodes/                # camera_tracker, dynamixel_driver
 ```

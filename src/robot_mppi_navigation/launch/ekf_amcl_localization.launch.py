@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""调试用：只起 EKF（日常请用 rviz_goal_navigation.launch.py）。
+"""Debug: EKF only (daily use rviz_goal_navigation.launch.py instead).
 
-用法:
+Usage:
   ros2 launch robot_mppi_navigation ekf_amcl_localization.launch.py
 """
 

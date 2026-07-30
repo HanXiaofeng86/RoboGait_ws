@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""启动导航层（不含硬件、不含 RViz）：EKF + 定位 + Nav2/MPPI + 速度链 + 安全闸。
+"""Navigation layer only (no hardware, no RViz): EKF + localization + Nav2/MPPI + velocity chain + safety gate.
 
-一般由 rviz_goal_navigation.launch.py Include，不要和硬件层重复各起一套。
+Usually Included by rviz_goal_navigation.launch.py — do not start a second copy beside hardware.
 
     controller_server (MPPI) -> cmd_vel_nav
     velocity_smoother         -> cmd_vel_smoothed

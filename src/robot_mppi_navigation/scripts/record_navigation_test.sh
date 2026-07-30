@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 录制导航测试 rosbag（话题列表见 config/diagnostic_recording_topics.yaml）
-# 用法: ./scripts/record_navigation_test.sh [测试名]
+# Record a navigation test rosbag (topic list: config/diagnostic_recording_topics.yaml).
+# Usage: ./scripts/record_navigation_test.sh [test_name]
 set -e
 
 TEST_NAME="${1:-navigation_test}"

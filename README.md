@@ -21,6 +21,16 @@ ROS 2 Humble: pure-robot navigation (`robot_*`) + person follow (`robogait_*`).
 | [`robogait_person_follow`](src/robogait_person_follow/README.md) | **B** person → Nav goal (pure MPPI) |
 | [`robogait_person_interfaces`](src/robogait_person_interfaces) | **B** `User.msg` |
 
+## Docs language
+
+| File | Language |
+|------|----------|
+| [`PROJECT_CHANGES.md`](PROJECT_CHANGES.md) | **Chinese** (main handbook) |
+| [`TEST_PLAN.md`](TEST_PLAN.md) | **Chinese** (on-robot checklist) |
+| [`PROJECT_CHANGES_EN.md`](PROJECT_CHANGES_EN.md) | English handbook |
+| [`NODES_AND_TOPICS.md`](NODES_AND_TOPICS.md) | English node/topic graphs |
+| Package `README.md` files | English |
+
 ## Quick start
 
 ```bash
@@ -32,5 +42,5 @@ source install/setup.bash
 ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py
 ```
 
-Mode A2 / Mode B: see package READMEs and [`PROJECT_CHANGES.md`](PROJECT_CHANGES.md).  
+Mode A2 / Mode B: see package READMEs.  
 Node/topic graph: [`NODES_AND_TOPICS.md`](NODES_AND_TOPICS.md).

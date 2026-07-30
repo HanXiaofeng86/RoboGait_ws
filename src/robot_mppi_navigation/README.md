@@ -28,4 +28,5 @@ maps/     lab2_new
 robot_mppi_navigation/safety/   safety_gate
 ```
 
-See workspace `PROJECT_CHANGES.md` §2 for file-by-file notes.
+See workspace Chinese handbook `PROJECT_CHANGES.md` §2 for file-by-file notes
+(English twin: `PROJECT_CHANGES_EN.md`).

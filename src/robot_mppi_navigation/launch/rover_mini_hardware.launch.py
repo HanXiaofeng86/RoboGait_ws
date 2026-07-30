@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""只启动硬件：底盘驱动 + URDF + 雷达 + IMU。
+"""Hardware only: chassis driver + URDF + lidar + IMU.
 
-用法:
+Usage:
   ros2 launch robot_mppi_navigation rover_mini_hardware.launch.py
 """
 

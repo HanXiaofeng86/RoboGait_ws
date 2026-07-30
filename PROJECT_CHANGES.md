@@ -1,6 +1,7 @@
 # RoboGait_ws 项目手册（给小白看）
 
-> **中文主文档。** 英文版：`PROJECT_CHANGES_EN.md`（须同步）。  
+> **中文主文档**（与 `TEST_PLAN.md` 为工作空间仅有的中文手册）。英文版：`PROJECT_CHANGES_EN.md`（须同步）。  
+> 包内 `README.md`、launch 说明、`NODES_AND_TOPICS.md` 等其余文档一律用**英文**。  
 > 写法：先总览，再按**包**把每个重要文件说清楚——**是干什么的、平时要不要改、想改什么功能去哪个文件**。
 
 ---
@@ -511,16 +512,12 @@ ros2 launch robogait_person_follow person_layer.launch.py
 
 | 文件 / 目录 | 是干什么的 | 小白怎么用 |
 |-------------|------------|------------|
-| **`PROJECT_CHANGES.md`** | 本中文手册 | 查「文件干什么、去哪改」 |
+| **`PROJECT_CHANGES.md`** | 本中文手册（与 `TEST_PLAN.md` 为仅有的中文文档） | 查「文件干什么、去哪改」 |
 | **`PROJECT_CHANGES_EN.md`** | 英文手册（与中文对齐） | 给英文读者 |
 | **`TEST_PLAN.md`** | 实机验收（中文）：准备 0/1 → T1–T8 → B0/B1/B2 | **上机按它做**；先 B0 云台再跟人 |
-| **`NODES_AND_TOPICS.md`** | 节点↔话题图（**英文**，对照 launch/源码核对） | 搞不清谁订谁发时看它 |
-| **`README.md`** | 仓库首页简介 | GitHub / 新人入口 |
-| **`src/robot_mppi_navigation/README.md`** | 栈包英文说明 | 与第二节互补 |
-| **`src/robot_simple_commander/README.md`** | 任务包英文说明 | 与第三节互补 |
-| **`src/robogait_perception/README.md`** | Mode B 感知骨架说明 | 第四节 |
-| **`src/robogait_gimbal/README.md`** | Mode B 云台骨架说明 | 第四节 |
-| **`src/robogait_person_follow/README.md`** | Mode B 跟人骨架说明 | 第四节 |
+| **`NODES_AND_TOPICS.md`** | 节点↔话题图（英文） | 搞不清谁订谁发时看它 |
+| **`README.md`** | 仓库首页简介（英文） | GitHub / 新人入口 |
+| **`src/*/README.md`** | 各包说明（英文） | 与第二～四节互补 |
 | **`src/navigation2/`** | 整份 Nav2 源码（含 MPPI 实现） | **进阶**：改控制器算法、critic 实现 |
 | **`.vscode/settings.json`** | 打开 md 默认预览 | 可不管 |
 | **`.gitignore`** | 不把 build/install/log 等提交进 git | 可不管 |

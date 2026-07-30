@@ -1,6 +1,7 @@
 # RoboGait_ws Project Handbook (beginner-friendly)
 
 > **English handbook.** Chinese source of truth: `PROJECT_CHANGES.md` (keep in sync).  
+> **Chinese-only docs:** `PROJECT_CHANGES.md`, `TEST_PLAN.md`. Package READMEs, launch docs, and `NODES_AND_TOPICS.md` are English.  
 > Structure: short overview, then **per package**, every important file explained—**what it does, when you edit it, where to go for a given change**.
 
 ---
@@ -501,16 +502,12 @@ ros2 launch robogait_person_follow person_layer.launch.py
 
 | Item | What it does | Beginner use |
 |------|--------------|--------------|
-| **`PROJECT_CHANGES.md`** | Chinese handbook | “What file / where to edit” |
+| **`PROJECT_CHANGES.md`** | Chinese handbook (with `TEST_PLAN.md`: only Chinese docs) | “What file / where to edit” |
 | **`PROJECT_CHANGES_EN.md`** | This English handbook | Same |
 | **`TEST_PLAN.md`** | On-robot checklist (**Chinese**): prep 0/1 → T1–T8 → B0/B1/B2 | Follow it; **B0 gimbal before person follow** |
-| **`NODES_AND_TOPICS.md`** | Node↔topic diagrams (**English**, verified vs launch/code) | Who publishes / subscribes what |
-| **`README.md`** | Repo landing | First link for newcomers |
-| **`src/robot_mppi_navigation/README.md`** | Stack package README | Complements §2 |
-| **`src/robot_simple_commander/README.md`** | Record/follow README | Complements §3 |
-| **`src/robogait_perception/README.md`** | Mode B perception | §4 |
-| **`src/robogait_gimbal/README.md`** | Mode B gimbal | §4 |
-| **`src/robogait_person_follow/README.md`** | Mode B person follow | §4 |
+| **`NODES_AND_TOPICS.md`** | Node↔topic diagrams (**English**) | Who publishes / subscribes what |
+| **`README.md`** | Repo landing (**English**) | First link for newcomers |
+| **`src/*/README.md`** | Package READMEs (**English**) | Complements §§2–4 |
 | **`src/navigation2/`** | Full Nav2 sources (incl. MPPI) | **Advanced** algorithm / critic edits |
 | **`.vscode/settings.json`** | Markdown preview default | Optional |
 | **`.gitignore`** | Ignore build/install/log | Leave alone |

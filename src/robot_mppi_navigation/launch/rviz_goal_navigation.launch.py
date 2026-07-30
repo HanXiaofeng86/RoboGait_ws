@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""一键启动：硬件 + Nav2/MPPI + AMCL + RViz（日常导航入口）。
+"""One-shot bringup: hardware + Nav2/MPPI + AMCL + RViz (daily nav entry).
 
-用法:
+Usage:
   ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py
 """
 
