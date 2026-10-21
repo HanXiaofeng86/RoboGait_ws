@@ -24,3 +24,7 @@ __pycache__/
 
 # Cursor local (do not commit agent caches / IDE state)
 .cursor/
+
+# slam_toolbox Serialize Map — AMCL nav only needs yaml + pgm
+**/maps/*.posegraph
+**/maps/*.data

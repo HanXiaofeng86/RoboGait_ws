@@ -1,0 +1,4 @@
+#!/usr/bin/env python3
+from robot_simple_commander.nodes.follow_path import main
+if __name__ == '__main__':
+    main()

@@ -30,6 +30,8 @@
 # Connector for UART integration of the BNO-055
 # See also https://pyserial.readthedocs.io/en/latest/pyserial_api.html
 import sys
+import time
+
 import serial
 
 from rclpy.node import Node
@@ -61,6 +63,16 @@ class UART(Connector):
         self.timeout = timeout
         self.serialConnection = None
 
+    def flush(self):
+        """Drop unread UART bytes so the next request is not parsed as leftover payload."""
+        if self.serialConnection is None:
+            return
+        try:
+            self.serialConnection.reset_input_buffer()
+            self.serialConnection.reset_output_buffer()
+        except Exception:  # noqa: B902
+            pass
+
     def connect(self):
         """Connect to the sensor.
         
@@ -74,6 +86,10 @@ class UART(Connector):
             self.node.get_logger().info('Unable to connect to IMU at port ' + self.port)
             self.node.get_logger().info('Check to make sure your device is connected')
             sys.exit(1)
+        # Leftover bytes from a previous crashed node look like a 45-byte
+        # fusion payload and make the next chip-id read fail immediately.
+        self.flush()
+        time.sleep(0.1)
 
     def read(self, reg_addr, length):
         """Read data from sensor via UART.
@@ -112,9 +128,11 @@ class UART(Connector):
         
         # Check for correct READ response header:
         if buf_in[0] != registers.COM_START_BYTE_RESP:
+            self.flush()
             raise TransmissionException('Wrong READ-request response header %s' % hex(buf_in[0]))
 
         if (buf_in.__len__()-2) != buf_in[1]:
+            self.flush()
             raise TransmissionException('Payload length mismatch detected: '
                                         + '  received=%s, awaited=%s'
                                         % (buf_in.__len__()-2, buf_in[1]))

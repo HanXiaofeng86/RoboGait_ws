@@ -1,4 +1,7 @@
-"""Reset RPLidar via SLAMTEC protocol command 0xA5 0x40."""
+"""Reset RPLidar via SLAMTEC protocol command 0xA5 0x40.
+
+Some units stay at health=2 after a single RESET; send twice with a longer settle.
+"""
 
 import sys
 import time
@@ -6,13 +9,21 @@ import time
 import serial
 
 
-def reset_lidar(port: str = '/dev/rplidar', baud: int = 1000000) -> None:
+def reset_lidar(
+    port: str = '/dev/rplidar',
+    baud: int = 1000000,
+    rounds: int = 2,
+    settle_s: float = 3.0,
+) -> None:
     ser = serial.Serial(port, baud, timeout=1)
     try:
-        ser.write(b'\xA5\x40')
-        ser.flush()
-        time.sleep(2.5)
-        ser.reset_input_buffer()
+        for i in range(rounds):
+            ser.write(b'\xA5\x40')
+            ser.flush()
+            time.sleep(settle_s)
+            ser.reset_input_buffer()
+            if i + 1 < rounds:
+                print(f'Lidar RESET {i + 1}/{rounds} on {port}, settling…')
     finally:
         ser.close()
 
@@ -25,7 +36,10 @@ def main(argv=None) -> int:
     except serial.SerialException as exc:
         print(f'Failed to open {port}: {exc}', file=sys.stderr)
         return 1
-    print(f'Lidar reset sent on {port}. Wait 2–3s, then restart the driver.')
+    print(
+        f'Lidar reset done on {port} (2× 0xA5 0x40). '
+        'If health is still 2, unplug/replug lidar USB power and retry.'
+    )
     return 0
 
 

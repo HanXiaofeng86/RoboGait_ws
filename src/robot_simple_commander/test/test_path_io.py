@@ -41,3 +41,27 @@ def test_path_yaml_roundtrip(tmp_path: Path):
     assert frame == 'local'
     assert len(loaded) == len(poses)
     assert abs(loaded[-1][0] - poses[-1][0]) < 1e-9
+
+
+def test_route_name_override_strips_suffix():
+    from robot_simple_commander.lib.route_name import load_route_name
+    assert load_route_name('loop1.yaml') == 'loop1'
+    assert load_route_name('loop1') == 'loop1'
+
+
+def test_return_path_already_home():
+    from robot_simple_commander.lib.return_path import build_return_poses
+    poses = [(0.0, 0.0, 0.2), (1.0, 0.0, 0.2), (2.0, 0.0, 0.2)]
+    assert build_return_poses(poses, (0.1, 0.05)) == []
+
+
+def test_return_path_faces_back_then_original_yaw():
+    from robot_simple_commander.lib.return_path import build_return_poses
+    poses = [(0.0, 0.0, 0.3), (1.0, 0.0, 0.3), (2.0, 0.0, 0.3)]
+    back = build_return_poses(poses, (2.0, 0.0))
+    assert len(back) >= 2
+    assert abs(back[-1][0]) < 1e-6
+    assert abs(back[-1][1]) < 1e-6
+    assert abs(back[-1][2] - 0.3) < 1e-6
+    assert abs(abs(back[0][2]) - math.pi) < 0.2
+

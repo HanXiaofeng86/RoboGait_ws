@@ -3,9 +3,11 @@
 Nav2 / **MPPI** stack for Rover Mini: hardware, localization, planner, MPPI
 controller, smoother, safety gate. Used for **Mode 1 (RViz Goal)**.
 
-**Independent of `robot_simple_commander`.** Path record/follow is a
-separate package with its own bringup — do not mix the two stacks in one shell
-unless you know what you are doing (two Nav2 instances).
+**Independent Nav2 from `robot_simple_commander`.** Path record/follow is a
+separate package — do not run both full stacks at once.
+
+Gamepad: `ros2 launch robot_mppi_navigation mini_teleop.launch.py`
+(not vendor `roverrobotics_driver mini_teleop` — that skips lidar RESET).
 
 ## Mode 1
 

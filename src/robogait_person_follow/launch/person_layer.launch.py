@@ -1,53 +1,57 @@
 #!/usr/bin/env python3
 """Person-follow layer on an already-running pure-MPPI Nav2 stack (terminal 2).
 
-Person → standoff NavigateToPose → MPPI outputs full [v, ω].
-No cmd_vel PID blend.
+Default person source is Nuitrack (skeleton). Overlay rover_workspace_final first.
+SDK (`person_source:=sdk`) is the point-cloud demo only — do not run both.
 
   Terminal 1: ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py
   Terminal 2: ros2 launch robogait_person_follow person_layer.launch.py
+  Terminal 2 camera RViz:  ... person_layer.launch.py use_rviz:=True
 """
 
 import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    perception_cfg = os.path.join(
-        get_package_share_directory('robogait_perception'),
-        'config', 'perception.yaml')
+    perception_share = get_package_share_directory('robogait_perception')
+    follow_share = get_package_share_directory('robogait_person_follow')
     gimbal_cfg = os.path.join(
         get_package_share_directory('robogait_gimbal'),
         'config', 'gimbal.yaml')
-    person_cfg = os.path.join(
-        get_package_share_directory('robogait_person_follow'),
-        'config', 'person_follow.yaml')
+    person_cfg = os.path.join(follow_share, 'config', 'person_follow.yaml')
 
     return LaunchDescription([
-        DeclareLaunchArgument('use_nuitrack', default_value='true'),
-        DeclareLaunchArgument('use_gimbal', default_value='true'),
-        DeclareLaunchArgument('device_name', default_value='/dev/ttyUSB0'),
-
-        Node(
-            package='orbbec_person_publisher',
-            executable='nuitrack_person_node',
-            name='nuitrack_person_node',
-            output='screen',
-            parameters=[{'image_width': 640, 'save_csv': False}],
-            condition=IfCondition(LaunchConfiguration('use_nuitrack')),
+        DeclareLaunchArgument(
+            'person_source',
+            default_value='nuitrack',
+            description="'nuitrack' = skeleton (default); 'sdk' = point cloud only",
         ),
-        Node(
-            package='robogait_perception',
-            executable='distance_orbbec',
-            name='distance_orbbec',
-            output='screen',
-            parameters=[perception_cfg],
+        DeclareLaunchArgument('use_rviz', default_value='False'),
+        DeclareLaunchArgument('use_gimbal', default_value='true'),
+        DeclareLaunchArgument(
+            'device_name',
+            default_value=(
+                '/dev/serial/by-id/'
+                'usb-FTDI_USB__-__Serial_Converter_FT8ISNFV-if00-port0'),
+        ),
+
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(perception_share, 'launch', 'person_source.launch.py')),
+            launch_arguments={
+                'person_source': LaunchConfiguration('person_source'),
+                'use_rviz': LaunchConfiguration('use_rviz'),
+                'use_robot_model': 'False',
+                'publish_static_tf': 'True',
+            }.items(),
         ),
         Node(
             package='robogait_person_follow',

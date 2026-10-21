@@ -1,0 +1,89 @@
+<?xml version="1.0"?>
+<!-- Dual-axis gimbal on the Mini payload.
+     gimbal_pan_joint  = Dynamixel ID1 yaw  (0 = home / forward)
+     gimbal_tilt_joint = Dynamixel ID2 pitch (0 = idle/home; origin tilts a little DOWN)
+     dynamixel_driver publishes these on /gimbal_joint_states. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="orbbec_gimbal">
+
+    <link name="gimbal_column_link">
+        <visual>
+            <origin xyz="0 0 0.11" rpy="0 0 0"/>
+            <geometry>
+                <cylinder radius="0.022" length="0.22"/>
+            </geometry>
+            <material name="gimbal_column">
+                <color rgba="0.18 0.18 0.20 1"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0.11" rpy="0 0 0"/>
+            <geometry>
+                <cylinder radius="0.022" length="0.22"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="gimbal_column_to_payload" type="fixed">
+        <parent link="payload_link"/>
+        <child link="gimbal_column_link"/>
+        <origin xyz="0 0 0.02" rpy="0 0 0"/>
+    </joint>
+
+    <link name="gimbal_yaw_link">
+        <visual>
+            <origin xyz="0 0 0.012" rpy="0 0 0"/>
+            <geometry>
+                <cylinder radius="0.035" length="0.024"/>
+            </geometry>
+            <material name="gimbal_yaw">
+                <color rgba="0.35 0.35 0.38 1"/>
+            </material>
+        </visual>
+    </link>
+
+    <joint name="gimbal_pan_joint" type="revolute">
+        <parent link="gimbal_column_link"/>
+        <child link="gimbal_yaw_link"/>
+        <origin xyz="0 0 0.22" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-1.57" upper="1.57" effort="5.0" velocity="3.0"/>
+    </joint>
+
+    <link name="orbbec_link">
+        <visual>
+            <origin xyz="-0.02 0 0" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.04 0.13 0.055"/>
+            </geometry>
+            <material name="orbbec_body">
+                <color rgba="0.10 0.75 0.90 1"/>
+            </material>
+        </visual>
+        <visual>
+            <origin xyz="0.012 0 0" rpy="0 1.5708 0"/>
+            <geometry>
+                <cylinder radius="0.016" length="0.012"/>
+            </geometry>
+            <material name="orbbec_lens">
+                <color rgba="0.05 0.05 0.08 1"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="-0.02 0 0" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.04 0.13 0.055"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <!-- Joint 0 = servo idle/home. RPY pitch about +Y: positive tilts the lens
+         DOWN (optical +X toward -Z). A negative pitch here points X at the sky. -->
+    <joint name="gimbal_tilt_joint" type="revolute">
+        <parent link="gimbal_yaw_link"/>
+        <child link="orbbec_link"/>
+        <origin xyz="0.03 0 0.04" rpy="0 0.12 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-0.70" upper="0.70" effort="5.0" velocity="3.0"/>
+    </joint>
+
+</robot>

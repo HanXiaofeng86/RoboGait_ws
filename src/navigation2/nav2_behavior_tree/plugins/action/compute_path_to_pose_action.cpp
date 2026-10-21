@@ -30,6 +30,7 @@ ComputePathToPoseAction::ComputePathToPoseAction(
 
 void ComputePathToPoseAction::on_tick()
 {
+  goal_.use_start = false;
   getInput("goal", goal_.goal);
   getInput("planner_id", goal_.planner_id);
   if (getInput("start", goal_.start)) {

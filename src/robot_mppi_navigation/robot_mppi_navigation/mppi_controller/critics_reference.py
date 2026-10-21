@@ -42,7 +42,7 @@ CRITICS = {
         'purpose': 'Penalizes lateral offset between trajectory and path.',
         'activation': 'Deactivates near goal (threshold 0.5 m) or when path '
                       'is blocked above max_path_occupancy_ratio.',
-        'weight': 14.0,
+        'weight': 8.0,
         'expected_effect': 'Low lateral path error on straights and curves.',
         'failure_mode': 'Too high: hugs the path into obstacles, fights the '
                         'obstacle critic.',
@@ -51,7 +51,7 @@ CRITICS = {
         'purpose': 'Rewards progress toward a point ahead on the path; the '
                    'main forward-driving term.',
         'activation': 'Deactivates near goal (threshold 1.4 m).',
-        'weight': 5.0,
+        'weight': 10.0,
         'expected_effect': 'Steady forward progress along the path.',
         'failure_mode': 'Too high: overshoots corners due to speed pressure.',
     },
@@ -59,7 +59,7 @@ CRITICS = {
         'purpose': 'Penalizes heading error relative to path direction; '
                    'prepares turns before corners.',
         'activation': 'When heading error to furthest point > threshold.',
-        'weight': 2.0,
+        'weight': 1.0,
         'expected_effect': 'Earlier turn-in on 90-degree corners.',
         'failure_mode': 'Too high: wavy heading on straight segments.',
     },

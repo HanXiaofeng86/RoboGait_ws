@@ -47,8 +47,14 @@ bool transformPoseInTargetFrame(
   static rclcpp::Logger logger = rclcpp::get_logger("transformPoseInTargetFrame");
 
   try {
+    // Planning / robot pose must use *latest* TF. A NavigateToPose goal
+    // stamp from the outbound trip (~20 s old) is already gone from the
+    // buffer; looking it up first waits transform_timeout then still fails.
+    auto query = input_pose;
+    query.header.stamp.sec = 0;
+    query.header.stamp.nanosec = 0;
     transformed_pose = tf_buffer.transform(
-      input_pose, target_frame,
+      query, target_frame,
       tf2::durationFromSec(transform_timeout));
     return true;
   } catch (tf2::LookupException & ex) {

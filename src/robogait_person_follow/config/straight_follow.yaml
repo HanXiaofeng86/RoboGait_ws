@@ -1,0 +1,18 @@
+straight_follow:
+  ros__parameters:
+    # Old lab band was 3.0–3.1 m. Wider here so depth noise does not hunt.
+    target_distance_min: 2.9
+    target_distance_max: 3.2
+    # Farther than this, or person lost: stop. Do not chase across the room.
+    max_distance_m: 5.0
+    lost_timeout_sec: 1.2
+    # 1 m of error → 0.8 m/s before the caps below.
+    kp: 0.8
+    # Ceiling for THIS line only. Not MPPI vx_max. Do not raise past 1.0.
+    max_forward_m_s: 0.70
+    max_reverse_m_s: 0.30
+    max_accel_m_s2: 0.70
+    brake_accel_m_s2: 1.2
+    publish_hz: 20.0
+    cmd_topic: cmd_vel_smoothed
+    user_topic: user_coordinates

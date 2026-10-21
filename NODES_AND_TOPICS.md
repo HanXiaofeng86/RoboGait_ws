@@ -140,11 +140,16 @@ A2 uses **its own** stack copy (`robot_simple_commander` `safety_gate`), not `ro
 
 ## 4. Mode B0 — gimbal only
 
-Launch: `ros2 launch robogait_gimbal test_gimbal.launch.py`
+Launch: `ros2 launch robogait_gimbal test_gimbal.launch.py`  
+(default `person_source:=nuitrack`; overlay `~/rover_workspace_final` first. SDK: `person_source:=sdk` for point cloud only)
 
 ```text
-nuitrack_person_node                    [external: orbbec_person_publisher]
-   |  /orbbec/person_position           (geometry_msgs/Point)
+nuitrack_person_node  OR  person_sdk
+   |  /orbbec/points                    (sensor_msgs/PointCloud2; SDK, optional Nuitrack)
+   |  /orbbec/color/image_raw           (SDK)
+   |  /orbbec/depth/image_raw           (SDK)
+   |  /orbbec/person_marker             (SDK)
+   |  /orbbec/person_position           (geometry_msgs/Point; Nuitrack torso)
    |  /orbbec/person_center_pixel       (std_msgs/Int32)
    |  /orbbec/num_users                 (std_msgs/Int32)
    v
@@ -160,12 +165,13 @@ distance_filter                        |
    |            v                      |
    |      camera_tracker <-------------+  (also subs /person_center_pixel)
    |            |
-   |            |  /camera_position     (std_msgs/Float32, degrees)
+   |            |  /camera_position     (std_msgs/Float32, pan deg)
+   |            |  /camera_tilt         (std_msgs/Float32, tilt deg)
    |            v
-   |      dynamixel_driver <--- also subs /user_raw (lost-person handling)
+   |      dynamixel_driver
    |            |
    |            v
-   |         Dynamixel servo (camera pan)
+   |         Dynamixel ID1 pan + ID2 tilt (Femto Mega FOV)
    v
  (no /cmd_vel — chassis not driven in B0)
 ```
@@ -218,9 +224,11 @@ Person supplies a **goal**; chassis `[v, ω]` still comes only from MPPI.
 | `follow_path` | — | action `follow_path`; topic `/predefined_path` |
 | `cancel_navigation` | — | cancel Nav2 actions |
 | `distance_orbbec` | `/orbbec/person_position`, `/orbbec/person_center_pixel`, `/orbbec/num_users` | `/user_raw`, `/person_center_pixel` |
+| `person_sdk` | (K4A camera) | `/orbbec/points`, `/orbbec/color/image_raw`, `/orbbec/depth/image_raw`, `/orbbec/person_marker`, `/orbbec/person_position`, `/orbbec/person_center_pixel`, `/orbbec/num_users` |
+| `nuitrack_person_node` | (Nuitrack + Femto; overlay) | `/orbbec/person_position`, `/orbbec/person_center_pixel`, `/orbbec/num_users`, `/orbbec/points` |
 | `distance_filter` | `/user_raw` | `/user_coordinates` |
-| `camera_tracker` | `/user_coordinates`, `/person_center_pixel` | `/camera_position` |
-| `dynamixel_driver` | `/camera_position`, `/user_raw` | (Dynamixel serial) |
+| `camera_tracker` | `/user_coordinates`, `/person_center_pixel` | `/camera_position`, `/camera_tilt` |
+| `dynamixel_driver` | `/camera_position`, `/camera_tilt`, `/user_raw` | (Dynamixel serial, ID1 pan + ID2 tilt) |
 | `person_nav_goal` | `/user_coordinates` | `/person_nav_goal`; action `navigate_to_pose` |
 
 ---
@@ -232,7 +240,8 @@ Person supplies a **goal**; chassis `[v, ω]` still comes only from MPPI.
 | Implied “MPPI” as a node | Use `controller_server` (MPPI is the plugin) |
 | Incomplete A1 node list | Added lifecycle, smoother_server, waypoint_follower, hardware names |
 | `record_path` shown vaguely | It uses **TF**, not odometry topics |
-| Missing `nuitrack_person_node` | External, but started by our B launches |
+| Missing `person_sdk` | Femto Mega USB3 + `~/orbbec_wrapper_v2`; see handbook 7.26. Point-cloud demo only (`person_source:=sdk`) |
+| Missing `nuitrack_person_node` | Overlay `~/rover_workspace_final` then this workspace; default for gimbal/gait. See handbook 7.34 |
 | Not listing all 11 executables | Section 1 is the complete custom list |
 
 When A1 is running, `ros2 node list` will show **many more** names (costmap nodes under namespaces, BT internal nodes, etc.). Section 2 lists the **launch-level** names we start; it is not every subprocess name Nav2 may spawn.

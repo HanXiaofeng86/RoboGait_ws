@@ -3,7 +3,7 @@
 <package format="3">
   <name>robogait_person_follow</name>
   <version>0.1.0</version>
-  <description>Mode B: person → Nav2 goal; chassis velocity from pure MPPI only (Python).</description>
+  <description>Mode B: person follow. B1/B2 send a Nav2 goal; B3 is straight distance-only drive (Python).</description>
   <maintainer email="robogait@todo.todo">robogait</maintainer>
   <license>Apache-2.0</license>
 

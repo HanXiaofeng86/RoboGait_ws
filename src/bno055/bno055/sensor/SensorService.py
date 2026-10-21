@@ -28,7 +28,6 @@
 import json
 from math import sqrt
 import struct
-import sys
 from time import sleep
 
 from bno055 import registers
@@ -66,16 +65,27 @@ class SensorService:
     def configure(self):
         """Configure the IMU sensor hardware."""
         self.node.get_logger().info('Configuring device...')
-        try:
-            data = self.con.receive(registers.BNO055_CHIP_ID_ADDR, 1)
-            if data[0] != registers.BNO055_ID:
-                raise IOError('Device ID=%s is incorrect' % data)
-            # print("device sent ", binascii.hexlify(data))
-        except Exception as e:  # noqa: B902
-            # This is the first communication - exit if it does not work
-            self.node.get_logger().error('Communication error: %s' % e)
-            self.node.get_logger().error('Shutting down ROS node...')
-            sys.exit(1)
+        last_err = None
+        for attempt in range(8):
+            try:
+                if hasattr(self.con, 'flush'):
+                    self.con.flush()
+                sleep(0.15)
+                data = self.con.receive(registers.BNO055_CHIP_ID_ADDR, 1)
+                if data[0] != registers.BNO055_ID:
+                    raise IOError('Device ID=%s is incorrect' % data)
+                last_err = None
+                break
+            except Exception as e:  # noqa: B902
+                last_err = e
+                if attempt == 7:
+                    self.node.get_logger().warn(
+                        'IMU chip-id read failed (8/8): %s' % e)
+                sleep(0.4)
+        if last_err is not None:
+            # Keep the process (and serial port) instead of sys.exit → launch
+            # respawn fighting the same UART ("multiple access on port").
+            raise IOError('IMU communication failed after retries: %s' % last_err)
 
         # IMU connected => apply IMU Configuration:
         if not (self.con.transmit(registers.BNO055_OPR_MODE_ADDR, 1, bytes([registers.OPERATION_MODE_CONFIG]))):
@@ -110,9 +120,12 @@ class SensorService:
                                   mount_positions[self.param.placement_axis_remap.value])):
             self.node.get_logger().warn('Unable to set sensor placement configuration.')
 
-        # Show the current sensor offsets
-        self.node.get_logger().info('Current sensor offsets:')
-        self.print_calib_data()
+        # Show the current sensor offsets (optional; do not kill the node)
+        try:
+            self.node.get_logger().info('Current sensor offsets:')
+            self.print_calib_data()
+        except Exception as e:  # noqa: B902
+            self.node.get_logger().warn('Could not read calibration offsets: %s' % e)
         if self.param.set_offsets.value:
             configured_offsets = \
                 self.set_calib_offsets(
@@ -221,6 +234,11 @@ class SensorService:
         imu_msg.angular_velocity.z = \
             self.unpackBytesToFloat(buf[16], buf[17]) / self.param.gyr_factor.value
         imu_msg.angular_velocity_covariance = imu_raw_msg.angular_velocity_covariance
+        # UART garbage can decode as a huge yaw rate and spin the EKF. Skip it.
+        if (abs(imu_msg.angular_velocity.z) > 5.0
+                or abs(imu_msg.angular_velocity.x) > 20.0
+                or abs(imu_msg.angular_velocity.y) > 20.0):
+            return
         self.pub_imu.publish(imu_msg)
 
         # Publish magnetometer data

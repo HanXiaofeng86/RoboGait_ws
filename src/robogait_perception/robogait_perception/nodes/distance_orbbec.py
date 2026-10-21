@@ -1,4 +1,5 @@
-"""Bridge Orbbec/Nuitrack topics into filtered person messages for Mode B."""
+#!/usr/bin/env python3
+"""Bridge Orbbec person topics into filtered person messages for Mode B."""
 
 from __future__ import annotations
 
@@ -21,8 +22,8 @@ class DistanceOrbbec(Node):
         self.declare_parameter('timeout_sec', 0.5)
         self.declare_parameter('min_z_m', 0.15)
         self.declare_parameter('max_z_m', 15.0)
-        self.declare_parameter('hold_last_valid_sec', 1.2)
-        self.declare_parameter('publish_period_sec', 0.02)
+        self.declare_parameter('hold_last_valid_sec', 0.4)
+        self.declare_parameter('publish_period_sec', 0.1)
 
         pos_topic = self.get_parameter('person_position_topic').value
         pixel_topic = self.get_parameter('person_center_pixel_topic').value
@@ -49,17 +50,26 @@ class DistanceOrbbec(Node):
         self._last_valid_time = self.get_clock().now()
 
         period = float(self.get_parameter('publish_period_sec').value)
-        self.create_timer(period, self._publish)
+        self.create_timer(period, self._on_timer)
 
     def _on_position(self, msg: Point) -> None:
         self._last_pos_time = self.get_clock().now()
         self._position = (msg.x, msg.y, msg.z)
+        self._publish()
 
     def _on_pixel(self, msg: Int32) -> None:
         self._center_pixel = msg.data
+        if self._position is not None:
+            self._publish()
 
     def _on_num_users(self, msg: Int32) -> None:
         self._num_users = msg.data
+
+    def _on_timer(self) -> None:
+        # Only for lost-person timeout; new detections publish from _on_position.
+        elapsed = (self.get_clock().now() - self._last_pos_time).nanoseconds / 1e9
+        if elapsed >= self._timeout:
+            self._publish()
 
     def _publish(self) -> None:
         now = self.get_clock().now()
@@ -76,14 +86,19 @@ class DistanceOrbbec(Node):
             if self._min_z <= z <= self._max_z:
                 user.detection = 1
                 user.x, user.y, user.z = x, y, z
-                pixel.data = (
-                    self._center_pixel
-                    if self._center_pixel is not None
-                    else self._default_pixel
-                )
+                # Depth lock must still yaw: never publish pixel=0 while z>0.
+                if self._center_pixel is not None and self._center_pixel > 0:
+                    pixel.data = self._center_pixel
+                else:
+                    pixel.data = self._default_pixel
                 self._last_valid = user
                 self._last_valid_pixel = pixel.data
                 self._last_valid_time = now
+                # Nuitrack torso has y (up); SDK depth-blob zeros y.
+                joint = 'torso' if abs(y) > 1e-6 else 'depth'
+                self.get_logger().info(
+                    f'Person locked joint={joint} pixel={pixel.data} z={z:.2f} m',
+                    throttle_duration_sec=2.0)
             else:
                 user.detection = 0
                 pixel.data = 0

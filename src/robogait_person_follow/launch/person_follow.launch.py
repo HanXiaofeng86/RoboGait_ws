@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """B1 one-shot: pure-MPPI Nav2 + person layer (person → goal → MPPI).
 
+Default person source is Nuitrack. Overlay rover_workspace_final first.
+Do not run SDK and Nuitrack together (same USB camera).
+
+  source ~/rover_workspace_final/install/setup.bash
+  source ~/RoboGait_ws/install/setup.bash
   ros2 launch robogait_person_follow person_follow.launch.py
-  ros2 launch robogait_person_follow person_follow.launch.py use_rviz:=False
 """
 
 import os
@@ -21,7 +25,17 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('use_rviz', default_value='True'),
         DeclareLaunchArgument('use_gimbal', default_value='true'),
-        DeclareLaunchArgument('device_name', default_value='/dev/ttyUSB0'),
+        DeclareLaunchArgument(
+            'person_source',
+            default_value='nuitrack',
+            description="'nuitrack' = skeleton (default); 'sdk' = point cloud only",
+        ),
+        DeclareLaunchArgument(
+            'device_name',
+            default_value=(
+                '/dev/serial/by-id/'
+                'usb-FTDI_USB__-__Serial_Converter_FT8ISNFV-if00-port0'),
+        ),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
@@ -36,6 +50,8 @@ def generate_launch_description():
             launch_arguments={
                 'use_gimbal': LaunchConfiguration('use_gimbal'),
                 'device_name': LaunchConfiguration('device_name'),
+                'person_source': LaunchConfiguration('person_source'),
+                'use_rviz': 'False',
             }.items(),
         ),
     ])

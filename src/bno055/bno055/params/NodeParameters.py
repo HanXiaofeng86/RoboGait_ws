@@ -48,7 +48,6 @@ class NodeParameters:
     """
 
     def __init__(self, node: Node):
-        node.get_logger().info('Initializing parameters')
         # Declare parameters of the ROS2 node and their default values:
 
         # The topic prefix to use (can be empty if not required)
@@ -102,90 +101,42 @@ class NodeParameters:
         node.declare_parameter('variance_mag', value=registers.DEFAULT_VARIANCE_MAG)
 
         # get the parameters - requires CLI arguments '--ros-args --params-file <parameter file>'
-        node.get_logger().info('Parameters set to:')
-
         try:
             self.ros_topic_prefix = node.get_parameter('ros_topic_prefix')
-            node.get_logger().info('\tros_topic_prefix:\t"%s"' % self.ros_topic_prefix.value)
-
             self.connection_type = node.get_parameter('connection_type')
-            node.get_logger().info('\tconnection_type:\t"%s"' % self.connection_type.value)
 
             if self.connection_type.value == I2C.CONNECTIONTYPE_I2C:
-
                 self.i2c_bus = node.get_parameter('i2c_bus')
-                node.get_logger().info('\ti2c_bus:\t\t"%s"' % self.i2c_bus.value)
-
                 self.i2c_addr = node.get_parameter('i2c_addr')
-                node.get_logger().info('\ti2c_addr:\t\t"%s"' % self.i2c_addr.value)
-
             elif self.connection_type.value == UART.CONNECTIONTYPE_UART:
-
                 self.uart_port = node.get_parameter('uart_port')
-                node.get_logger().info('\tuart_port:\t\t"%s"' % self.uart_port.value)
-
                 self.uart_baudrate = node.get_parameter('uart_baudrate')
-                node.get_logger().info('\tuart_baudrate:\t\t"%s"' % self.uart_baudrate.value)
-
                 self.uart_timeout = node.get_parameter('uart_timeout')
-                node.get_logger().info('\tuart_timeout:\t\t"%s"' % self.uart_timeout.value)
 
             self.frame_id = node.get_parameter('frame_id')
-            node.get_logger().info('\tframe_id:\t\t"%s"' % self.frame_id.value)
-
             self.data_query_frequency = node.get_parameter('data_query_frequency')
-            node.get_logger().info('\tdata_query_frequency:\t"%s"'
-                                   % self.data_query_frequency.value)
-
             self.calib_status_frequency = node.get_parameter('calib_status_frequency')
-            node.get_logger().info('\tcalib_status_frequency:\t"%s"'
-                                   % self.calib_status_frequency.value)
-
             self.operation_mode = node.get_parameter('operation_mode')
-            node.get_logger().info('\toperation_mode:\t\t"%s"' % self.operation_mode.value)
-
             self.placement_axis_remap = node.get_parameter('placement_axis_remap')
-            node.get_logger().info('\tplacement_axis_remap:\t"%s"'
-                                   % self.placement_axis_remap.value)
-
             self.acc_factor = node.get_parameter('acc_factor')
-            node.get_logger().info('\tacc_factor:\t\t"%s"' % self.acc_factor.value)
-
             self.mag_factor = node.get_parameter('mag_factor')
-            node.get_logger().info('\tmag_factor:\t\t"%s"' % self.mag_factor.value)
-
             self.gyr_factor = node.get_parameter('gyr_factor')
-            node.get_logger().info('\tgyr_factor:\t\t"%s"' % self.gyr_factor.value)
-
             self.grav_factor = node.get_parameter('grav_factor')
-            node.get_logger().info('\tgrav_factor:\t\t"%s"' % self.grav_factor.value)
-
             self.set_offsets = node.get_parameter('set_offsets')
-            node.get_logger().info('\tset_offsets:\t\t"%s"' % self.set_offsets.value)
-
             self.offset_acc = node.get_parameter('offset_acc')
-            node.get_logger().info('\toffset_acc:\t\t"%s"' % self.offset_acc.value)
-
             self.radius_acc = node.get_parameter('radius_acc')
-            node.get_logger().info('\tradius_acc:\t\t"%s"' % self.radius_acc.value)
-
             self.offset_mag = node.get_parameter('offset_mag')
-            node.get_logger().info('\toffset_mag:\t\t"%s"' % self.offset_mag.value)
-
             self.radius_mag = node.get_parameter('radius_mag')
-            node.get_logger().info('\tradius_mag:\t\t"%s"' % self.radius_mag.value)
-
             self.offset_gyr = node.get_parameter('offset_gyr')
-            node.get_logger().info('\toffset_gyr:\t\t"%s"' % self.offset_gyr.value)
-
             self.variance_acc = node.get_parameter('variance_acc')
-            node.get_logger().info('\tvariance_acc:\t\t"%s"' % self.variance_acc.value)
             self.variance_angular_vel = node.get_parameter('variance_angular_vel')
-            node.get_logger().info('\tvariance_angular_vel:\t"%s"' % self.variance_angular_vel.value)
             self.variance_orientation = node.get_parameter('variance_orientation')
-            node.get_logger().info('\tvariance_orientation:\t"%s"' % self.variance_orientation.value)
             self.variance_mag = node.get_parameter('variance_mag')
-            node.get_logger().info('\tvariance_mag:\t\t"%s"' % self.variance_mag.value)
+            if self.connection_type.value == UART.CONNECTIONTYPE_UART:
+                node.get_logger().info(
+                    'BNO055 UART %s @ %s' % (self.uart_port.value, self.uart_baudrate.value))
+            else:
+                node.get_logger().info('BNO055 I2C parameters loaded')
         except Exception as e:  # noqa: B902
             node.get_logger().warn('Could not get parameters...setting variables to default')
             node.get_logger().warn('Error: "%s"' % e)

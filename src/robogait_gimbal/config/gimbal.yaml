@@ -1,24 +1,77 @@
 camera_tracker:
   ros__parameters:
-    kp: 0.52
-    kd: 0.08
+    # Gait: pelvis on the optical axis (full body in Femto Mega VFOV at 1.5–3 m).
+    lock_joint: pelvis
+    target_elevation_deg: 0.0
+    # Straight-follow test: freeze both axes at idle (chassis follows later).
+    # Corridor corners: freeze_gimbal false, enable_gimbal_pan true (keep tilt
+    # slow so walking does not nod the camera).
+    track_enable: true
+    freeze_gimbal: false
+    enable_gimbal_pan: true
+    enable_gimbal_tilt: true
+    kp: 1.0
+    kd: 0.0
     ki: 0.0
-    filter_window: 7
+    # Tilt much slower than pan: pelvis bob ~1–2° at 2 m; 5° dead zone ignores gait.
+    tilt_kp: 0.22
+    tilt_kd: 0.0
+    tilt_ki: 0.0
+    filter_window: 3
+    tilt_filter_window: 18
     image_center: 320.0
     image_width: 640.0
     hfov_deg: 69.0
-    dead_zone_deg: 2.5
-    dead_zone_outer_deg: 5.0
+    dead_zone_deg: 1.5
+    dead_zone_outer_deg: 2.0
+    tilt_dead_zone_deg: 5.0
+    # Skeleton atan2(y,z) can be tens of degrees; keep tilt from slamming the model.
+    max_tilt_cmd_deg: 20.0
+    # Nuitrack drops the skeleton under ~1 m; a half-body at the image edge
+    # would slam pan to the stop. Ignore closer than this (stand 1.5–3 m).
+    min_track_z_m: 1.0
 
 dynamixel_driver:
   ros__parameters:
-    device_name: "/dev/ttyUSB0"
-    dxl_id: 1
+    device_name: "/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT8ISNFV-if00-port0"
     baudrate: 57600
-    min_angle_deg: -80
-    max_angle_deg: 80
-    profile_velocity: 750
-    profile_acceleration: 150
-    dead_zone_deg: 2.5
-    min_goal_change_deg: 1.0
-    center_ticks: -1
+    pan_id: 1
+    tilt_id: 2
+    enable_tilt: true
+    enable_gimbal_pan: true
+    # true = hold idle_pan/idle_tilt forever (straight-follow, no tracking).
+    freeze_gimbal: false
+    goto_home_on_start: true
+    # Initial look direction while waiting for a person.
+    # Pan: 2048 = forward. 1024 ≈ 90° right, 3072 ≈ 90° left.
+    # Tilt: smaller ticks = look up, larger = look down.
+    # 1550 ≈ standing person's waist/pelvis at ~2 m (optical axis on COM).
+    idle_pan_ticks: 2048
+    idle_tilt_ticks: 1550
+    lock_sec: 0.08
+    lost_return_idle_sec: 1.5
+    pan_min_ticks: 1024
+    pan_max_ticks: 3072
+    pan_home_ticks: 2048
+    pan_invert: true
+    tilt_min_ticks: 700
+    tilt_max_ticks: 2220
+    tilt_home_ticks: 1550
+    tilt_invert: false
+    profile_velocity: 360
+    profile_acceleration: 50
+    home_profile_velocity: 80
+    dead_zone_deg: 1.5
+    min_goal_change_deg: 0.5
+    max_step_deg: 45.0
+    error_repeat_deg: 2.5
+    pan_urdf_joint: gimbal_pan_joint
+    tilt_urdf_joint: gimbal_tilt_joint
+    # Hardware: smaller tilt ticks = look UP. RViz +Y pitch looks DOWN, so tilt
+    # URDF sign is inverted. If the cloud still flies up when the lens tracks
+    # you, keep this at -1. If pan is mirrored left/right, flip pan_urdf_sign.
+    pan_urdf_sign: 1.0
+    tilt_urdf_sign: -1.0
+    tilt_urdf_max_deg: 40.0
+    joint_state_topic: gimbal_joint_states
+    joint_state_hz: 20.0

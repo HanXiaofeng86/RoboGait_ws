@@ -16,6 +16,9 @@ bt_navigator:
     odom_topic: /odometry/filtered
     bt_loop_duration: 10
     default_server_timeout: 20
+    # Overridden in nav2_mppi_controller.launch.py to this package's BT
+    # (no Spin/BackUp on a failed first plan).
+    default_nav_to_pose_bt_xml: ""
     plugin_lib_names:
     - nav2_compute_path_to_pose_action_bt_node
     - nav2_compute_path_through_poses_action_bt_node
@@ -75,12 +78,13 @@ bt_navigator_navigate_to_pose_rclcpp_node:
 controller_server:
   ros__parameters:
     use_sim_time: False
-    # Design requirement: 20 Hz control loop (period = 0.05 s).
+    # Humble MPPI requires period == model_dt (0.05 s → 20 Hz).
+    # 10 Hz with model_dt 0.05 throws "Controller period more then model dt".
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.01
-    failure_tolerance: 0.3
+    failure_tolerance: 3.0
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["general_goal_checker"]
     controller_plugins: ["FollowPath"]
@@ -88,36 +92,41 @@ controller_server:
 
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
-      movement_time_allowance: 10.0
+      # XY-only. A 180° in-place turn does not count; 20 s / 0.15 m
+      # aborted reverse goals ("Failed to make progress").
+      required_movement_radius: 0.08
+      movement_time_allowance: 45.0
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.25
       yaw_goal_tolerance: 0.25
 
-    # ---- Pure MPPI controller (baseline from design document) ----
+    # ---- Pure MPPI (no other local controller) ----
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
-      time_steps: 44
+      time_steps: 30
       model_dt: 0.05
-      batch_size: 1200
+      batch_size: 512
       iteration_count: 1
-      # Exploration noise
-      vx_std: 0.25
+      retry_attempt_limit: 5
+      # Exploration noise (wider vx_std lets open-space rollouts pick up speed)
+      vx_std: 0.22
       wz_std: 0.35
-      # Velocity limits (differential drive: v, omega)
-      vx_max: 1.2
+      # Indoor Mini: no reverse. vx_max is a ceiling, not cruise speed —
+      # MPPI uses more of it in open space and less near inflated obstacles.
+      # 1.2 made every rollout collide; 0.80 felt like a constant crawl.
+      vx_max: 1.00
       vx_min: 0.0
-      wz_max: 2.0
-      # Importance weighting
-      temperature: 0.24
+      wz_max: 1.20
+      # Higher temperature = less jumpy winner among rollouts.
+      temperature: 0.32
       gamma: 0.022
       motion_model: "DiffDrive"
       visualize: false
       reset_period: 1.0
       prune_distance: 1.7
-      transform_tolerance: 0.1
+      transform_tolerance: 1.0
       TrajectoryVisualizer:
         trajectory_step: 5
         time_step: 3
@@ -144,21 +153,21 @@ controller_server:
       ObstaclesCritic:
         enabled: true
         cost_power: 1
-        repulsion_weight: 1.5
+        repulsion_weight: 3.0
         critical_weight: 20.0
         # Must match local_costmap: polygon footprint → consider_footprint true
         # (else Nav2 warns "Inconsistent configuration in collision checking").
         consider_footprint: true
         collision_cost: 10000.0
-        collision_margin_distance: 0.1
+        collision_margin_distance: 0.10
         near_goal_distance: 0.5
         # Keep in sync with local_costmap.inflation_layer
-        inflation_radius: 0.35
-        cost_scaling_factor: 3.0
+        inflation_radius: 0.28
+        cost_scaling_factor: 2.5
       PathAlignCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 14.0
+        cost_weight: 8.0
         max_path_occupancy_ratio: 0.05
         trajectory_point_step: 3
         threshold_to_consider: 0.5
@@ -167,13 +176,13 @@ controller_server:
       PathFollowCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 5.0
+        cost_weight: 10.0
         offset_from_furthest: 5
         threshold_to_consider: 1.4
       PathAngleCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 2.0
+        cost_weight: 4.0
         offset_from_furthest: 4
         threshold_to_consider: 0.5
         max_angle_to_furthest: 1.0
@@ -193,20 +202,15 @@ local_costmap:
       resolution: 0.05
       footprint: "[[0.27305, 0.1778],[0.27305, -0.1778],[-0.27305, -0.1778],[-0.27305, 0.1778]]"
       footprint_padding: 0.01
-      plugins: ["voxel_layer", "inflation_layer"]
+      transform_tolerance: 1.0
+      plugins: ["obstacle_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.35
-      voxel_layer:
-        plugin: "nav2_costmap_2d::VoxelLayer"
+        cost_scaling_factor: 2.5
+        inflation_radius: 0.28
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        publish_voxel_map: True
-        origin_z: 0.0
-        z_resolution: 0.05
-        z_voxels: 16
-        max_obstacle_height: 2.0
-        mark_threshold: 0
         observation_sources: scan
         scan:
           topic: /scan
@@ -214,13 +218,10 @@ local_costmap:
           clearing: True
           marking: True
           data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
+          raytrace_max_range: 5.0
+          raytrace_min_range: 0.40
+          obstacle_max_range: 4.0
+          obstacle_min_range: 0.40
       always_send_full_costmap: True
 
 global_costmap:
@@ -234,7 +235,10 @@ global_costmap:
       footprint: "[[0.27305, 0.1778],[0.27305, -0.1778],[-0.27305, -0.1778],[-0.27305, 0.1778]]"
       footprint_padding: 0.025
       resolution: 0.05
-      track_unknown_space: true
+      # Known AMCL map: unknown-as-free. allow_unknown+track_unknown made
+      # NavFn snake through unknown (~14 m remaining in a small lab).
+      track_unknown_space: false
+      transform_tolerance: 1.0
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -246,17 +250,17 @@ global_costmap:
           clearing: True
           marking: True
           data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
+          raytrace_max_range: 5.0
+          raytrace_min_range: 0.40
+          obstacle_max_range: 4.0
+          obstacle_min_range: 0.40
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.4
+        cost_scaling_factor: 2.5
+        inflation_radius: 0.30
       always_send_full_costmap: True
 
 # AMCL: real map->odom localization on a known map (amcl:=True, needs lidar).
@@ -276,7 +280,7 @@ amcl:
     laser_model_type: "likelihood_field"
     laser_likelihood_max_dist: 2.0
     laser_max_range: 12.0
-    laser_min_range: 0.15
+    laser_min_range: 0.20
     max_beams: 60
     min_particles: 500
     max_particles: 2000
@@ -307,6 +311,67 @@ amcl:
       z: 0.0
       yaw: 0.0
 
+# Online SLAM (fallback when slam:=True without use_external_slam_params).
+# Preferred mapping entry: robot_slam_mapping (owns mapper_params_online_async.yaml).
+# Must use base_link — Mini URDF has no base_footprint.
+slam_toolbox:
+  ros__parameters:
+    use_sim_time: False
+    solver_plugin: solver_plugins::CeresSolver
+    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
+    ceres_preconditioner: SCHUR_JACOBI
+    ceres_trust_strategy: LEVENBERG_MARQUARDT
+    ceres_dogleg_type: TRADITIONAL_DOGLEG
+    ceres_loss_function: None
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_link
+    scan_topic: /scan
+    use_map_saver: true
+    mode: mapping
+    debug_logging: false
+    throttle_scans: 1
+    transform_publish_period: 0.02
+    map_update_interval: 5.0
+    resolution: 0.05
+    min_laser_range: 0.0
+    max_laser_range: 20.0
+    minimum_time_interval: 0.5
+    transform_timeout: 0.2
+    tf_buffer_duration: 30.0
+    stack_size_to_use: 40000000
+    enable_interactive_mode: true
+    use_scan_matching: true
+    use_scan_barycenter: true
+    minimum_travel_distance: 0.5
+    minimum_travel_heading: 0.5
+    scan_buffer_size: 10
+    scan_buffer_maximum_scan_distance: 10.0
+    link_match_minimum_response_fine: 0.1
+    link_scan_maximum_distance: 1.5
+    loop_search_maximum_distance: 3.0
+    do_loop_closing: true
+    loop_match_minimum_chain_size: 10
+    loop_match_maximum_variance_coarse: 3.0
+    loop_match_minimum_response_coarse: 0.35
+    loop_match_minimum_response_fine: 0.45
+    correlation_search_space_dimension: 0.5
+    correlation_search_space_resolution: 0.01
+    correlation_search_space_smear_deviation: 0.1
+    loop_search_space_dimension: 8.0
+    loop_search_space_resolution: 0.05
+    loop_search_space_smear_deviation: 0.03
+    distance_variance_penalty: 0.5
+    angle_variance_penalty: 1.0
+    fine_search_angle_offset: 0.00349
+    coarse_search_angle_offset: 0.349
+    coarse_angle_resolution: 0.0349
+    minimum_angle_penalty: 0.9
+    minimum_distance_penalty: 0.5
+    use_response_expansion: true
+    min_pass_through: 2
+    occupancy_threshold: 0.1
+
 map_server:
   ros__parameters:
     use_sim_time: False
@@ -323,14 +388,18 @@ map_saver:
 
 planner_server:
   ros__parameters:
-    expected_planner_frequency: 20.0
+    # NavFn is ~1 Hz on a real map. 20 Hz made cancel/Ctrl+C miss the
+    # deadline and left the action stuck on a stale start pose.
+    expected_planner_frequency: 1.0
     use_sim_time: False
+    transform_tolerance: 2.0
     planner_plugins: ["GridBased"]
     GridBased:
       plugin: "nav2_navfn_planner/NavfnPlanner"
-      tolerance: 0.5
-      use_astar: false
-      allow_unknown: true
+      # 0.5 m was too tight for a return goal sitting in inflation.
+      tolerance: 0.75
+      use_astar: true
+      allow_unknown: false
 
 smoother_server:
   ros__parameters:
@@ -388,13 +457,12 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    # Limits match the MPPI baseline (vx_max 1.2, wz_max 2.0).
-    # Negative linear velocity is allowed here only for recovery behaviors
-    # (backup); MPPI itself is limited to vx_min 0.0.
-    max_velocity: [1.2, 0.0, 2.0]
-    min_velocity: [-1.2, 0.0, -2.0]
-    max_accel: [2.5, 0.0, 3.0]
-    max_decel: [-2.5, 0.0, -3.0]
+    # Must match MPPI vx_max / wz_max (ceiling, not a constant cruise).
+    max_velocity: [1.00, 0.0, 1.20]
+    min_velocity: [-1.00, 0.0, -1.20]
+    # 0.45 m/s² never reached the cap in a short lab; 1.0 felt like a lunge.
+    max_accel: [0.70, 0.0, 1.2]
+    max_decel: [-0.90, 0.0, -1.5]
     odom_topic: "odometry/filtered"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]

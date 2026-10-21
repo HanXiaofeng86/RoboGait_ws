@@ -1,0 +1,39 @@
+<!--
+  Daily Mini nav: replan at 1 Hz, follow with MPPI.
+
+  Default Nav2 BT does Spin + BackUp when ComputePathToPose fails. On this
+  robot that looks like “moves a bit then stops” while the planner is still
+  stuck on a stale TF stamp. Recover by clearing costmaps and waiting only.
+
+  Do not ClearEntireCostmap on every failed plan — that made Humble
+  planner_server hang in waitForCostmap on the return trip.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            <!-- Do not clear the entire global map here. That sets
+                 current_=false; Humble planner_server then waits forever
+                 in waitForCostmap (return trip looked frozen, Ctrl+C hung). -->
+            <Wait wait_duration="1"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <Wait wait_duration="1"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <Sequence name="ClearAndWait">
+          <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+          <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          <Wait wait_duration="1"/>
+        </Sequence>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

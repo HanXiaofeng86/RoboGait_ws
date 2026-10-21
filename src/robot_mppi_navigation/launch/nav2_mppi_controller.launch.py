@@ -8,8 +8,11 @@ Usually Included by rviz_goal_navigation.launch.py — do not start a second cop
     safety_gate (pass/zero)   -> cmd_vel -> rover driver
 
 Localization (choose one):
-    slam:=True                 online SLAM Toolbox (needs healthy lidar)
-    slam:=False amcl:=True     map_server + AMCL on a known map (default; needs lidar)
+    slam:=True, use_external_slam_params:=False
+        → nav2 slam_launch (slam_toolbox block inside params_file)
+    slam:=True, use_external_slam_params:=True, slam_params_file:=...
+        → async_slam_toolbox_node with that YAML (e.g. robot_slam_mapping)
+    slam:=False amcl:=True     map_server + AMCL on a known map (default)
     slam:=False amcl:=False    map_server + static identity map->odom
 """
 
@@ -34,9 +37,16 @@ def _pkg_config(name: str) -> str:
     return str(Path(get_package_share_directory('robot_mppi_navigation')) / 'config' / name)
 
 
+def _nav_to_pose_bt() -> str:
+    return str(
+        Path(get_package_share_directory('robot_mppi_navigation'))
+        / 'behavior_trees' / 'navigate_to_pose_real_robot.xml'
+    )
+
+
 def _default_map_file() -> str:
     return str(
-        Path(get_package_share_directory('robot_mppi_navigation')) / 'maps' / 'lab2_new.yaml'
+        Path(get_package_share_directory('robot_mppi_navigation')) / 'maps' / 'mini_slab1.yaml'
     )
 
 
@@ -52,8 +62,14 @@ def generate_launch_description():
     amcl = LaunchConfiguration('amcl')
     params_file = LaunchConfiguration('params_file')
     map_yaml_file = LaunchConfiguration('map')
+    use_external_slam_params = LaunchConfiguration('use_external_slam_params')
+    slam_params_file = LaunchConfiguration('slam_params_file')
 
-    use_slam = PythonExpression(["'", slam, "' == 'True'"])
+    use_builtin_slam = PythonExpression(
+        ["'", slam, "' == 'True' and '", use_external_slam_params, "' != 'True'"])
+    # External: slam_toolbox params owned by another package (e.g. robot_slam_mapping)
+    use_external_slam = PythonExpression(
+        ["'", slam, "' == 'True' and '", use_external_slam_params, "' == 'True'"])
     use_map_localization = PythonExpression(["'", slam, "' != 'True'"])
     use_amcl = PythonExpression(
         ["'", slam, "' != 'True' and '", amcl, "' == 'True'"])
@@ -109,6 +125,13 @@ def generate_launch_description():
     ld.add_action(DeclareLaunchArgument(
         'map', default_value=_default_map_file(),
         description='Full path to map yaml (used when slam:=False)'))
+    ld.add_action(DeclareLaunchArgument(
+        'use_external_slam_params', default_value='False',
+        description='True=start slam_toolbox with slam_params_file '
+                    '(mapping package); False=nav2 slam_launch + params_file'))
+    ld.add_action(DeclareLaunchArgument(
+        'slam_params_file', default_value='',
+        description='slam_toolbox YAML when use_external_slam_params:=True'))
 
     # ---------- EKF (odom->base_link, /odometry/filtered) ----------
     ld.add_action(
@@ -122,11 +145,11 @@ def generate_launch_description():
         )
     )
 
-    # ---------- Localization path A: online SLAM ----------
+    # ---------- Localization path A1: Nav2 slam_launch (params_file) ----------
     ld.add_action(
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(slam_launch_path),
-            condition=IfCondition(use_slam),
+            condition=IfCondition(use_builtin_slam),
             launch_arguments={
                 'use_sim_time': use_sim_time,
                 'autostart': autostart,
@@ -134,6 +157,46 @@ def generate_launch_description():
                 'log_level': log_level,
                 'params_file': params_file,
             }.items(),
+        )
+    )
+
+    # ---------- Localization path A2: external slam_toolbox YAML ----------
+    ld.add_action(
+        Node(
+            package='slam_toolbox',
+            executable='async_slam_toolbox_node',
+            name='slam_toolbox',
+            output='screen',
+            condition=IfCondition(use_external_slam),
+            parameters=[
+                slam_params_file,
+                {'use_sim_time': use_sim_time},
+            ],
+        )
+    )
+    ld.add_action(
+        Node(
+            package='nav2_map_server',
+            executable='map_saver_server',
+            name='map_saver',
+            output='screen',
+            condition=IfCondition(use_external_slam),
+            parameters=[configured_params],
+            arguments=['--ros-args', '--log-level', log_level],
+        )
+    )
+    ld.add_action(
+        Node(
+            package='nav2_lifecycle_manager',
+            executable='lifecycle_manager',
+            name='lifecycle_manager_slam',
+            output='screen',
+            condition=IfCondition(use_external_slam),
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'autostart': autostart,
+                'node_names': ['map_saver'],
+            }],
         )
     )
 
@@ -260,7 +323,9 @@ def generate_launch_description():
             output='screen',
             respawn=use_respawn,
             respawn_delay=2.0,
-            parameters=[configured_params],
+            parameters=[configured_params, {
+                'default_nav_to_pose_bt_xml': _nav_to_pose_bt(),
+            }],
             arguments=['--ros-args', '--log-level', log_level],
         )
     )

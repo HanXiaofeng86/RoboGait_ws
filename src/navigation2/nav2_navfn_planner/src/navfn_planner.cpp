@@ -516,9 +516,29 @@ NavfnPlanner::mapToWorld(double mx, double my, double & wx, double & wy)
 void
 NavfnPlanner::clearRobotCell(unsigned int mx, unsigned int my)
 {
-  // TODO(orduno): check usage of this function, might instead be a request to
-  //               world_model / map server
-  costmap_->setCost(mx, my, nav2_costmap_2d::FREE_SPACE);
+  // One cell is not enough when the Mini is sitting in inflation at a goal.
+  // Return trip then starts in a lethal island and A* finds no path.
+  const double clear_radius = 0.22;
+  const double res = costmap_->getResolution();
+  const int r = std::max(1, static_cast<int>(std::ceil(clear_radius / res)));
+  const int size_x = static_cast<int>(costmap_->getSizeInCellsX());
+  const int size_y = static_cast<int>(costmap_->getSizeInCellsY());
+  const int r2 = r * r;
+  for (int dy = -r; dy <= r; ++dy) {
+    for (int dx = -r; dx <= r; ++dx) {
+      if (dx * dx + dy * dy > r2) {
+        continue;
+      }
+      const int x = static_cast<int>(mx) + dx;
+      const int y = static_cast<int>(my) + dy;
+      if (x < 0 || y < 0 || x >= size_x || y >= size_y) {
+        continue;
+      }
+      costmap_->setCost(
+        static_cast<unsigned int>(x), static_cast<unsigned int>(y),
+        nav2_costmap_2d::FREE_SPACE);
+    }
+  }
 }
 
 rcl_interfaces::msg::SetParametersResult

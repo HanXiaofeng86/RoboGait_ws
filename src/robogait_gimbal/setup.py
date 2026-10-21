@@ -22,7 +22,7 @@ setup(
     zip_safe=True,
     maintainer='robogait',
     maintainer_email='robogait@todo.todo',
-    description='Mode B: Dynamixel gimbal (camera pan), Python.',
+    description='Mode B: Dynamixel pan+tilt gimbal (camera FOV), Python.',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [

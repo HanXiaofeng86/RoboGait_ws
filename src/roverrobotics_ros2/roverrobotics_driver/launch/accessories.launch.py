@@ -44,7 +44,11 @@ def generate_launch_description():
             parameters = [accessories_config_path],
             remappings=[
                 ('/imu', '/imu/data')
-            ])
+            ],
+            output='log',  # IMU UART retries must not flood the launch terminal
+            respawn=True,
+            respawn_delay=5.0,
+        )
         
         # Add BNO055 IMU to launch description
         ld.add_action(bno055_node)

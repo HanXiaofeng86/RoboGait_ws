@@ -16,9 +16,9 @@ ROS 2 Humble: pure-robot navigation (`robot_*`) + person follow (`robogait_*`).
 |---------|------|
 | [`robot_mppi_navigation`](src/robot_mppi_navigation/README.md) | **A1** RViz Goal |
 | [`robot_simple_commander`](src/robot_simple_commander/README.md) | **A2** record + follow |
-| [`robogait_perception`](src/robogait_perception/README.md) | **B** see person |
-| [`robogait_gimbal`](src/robogait_gimbal/README.md) | **B** gimbal |
-| [`robogait_person_follow`](src/robogait_person_follow/README.md) | **B** person → Nav goal (pure MPPI) |
+| [`robogait_perception`](src/robogait_perception/README.md) | **B** person (SDK default / Nuitrack) |
+| [`robogait_gimbal`](src/robogait_gimbal/README.md) | **B** pan+tilt gimbal |
+| [`robogait_person_follow`](src/robogait_person_follow/README.md) | **B** person follow: B1/B2 Nav goal (MPPI), B3 straight distance |
 | [`robogait_person_interfaces`](src/robogait_person_interfaces) | **B** `User.msg` |
 
 ## Docs language
@@ -26,7 +26,7 @@ ROS 2 Humble: pure-robot navigation (`robot_*`) + person follow (`robogait_*`).
 | File | Language |
 |------|----------|
 | [`PROJECT_CHANGES.md`](PROJECT_CHANGES.md) | **Chinese** (main handbook) |
-| [`TEST_PLAN.md`](TEST_PLAN.md) | **Chinese** (on-robot checklist) |
+| [`TEST_PLAN.md`](TEST_PLAN.md) | **Chinese** — today's on-robot steps: mapping, navigation, record/follow |
 | [`PROJECT_CHANGES_EN.md`](PROJECT_CHANGES_EN.md) | English handbook |
 | [`NODES_AND_TOPICS.md`](NODES_AND_TOPICS.md) | English node/topic graphs |
 | Package `README.md` files | English |

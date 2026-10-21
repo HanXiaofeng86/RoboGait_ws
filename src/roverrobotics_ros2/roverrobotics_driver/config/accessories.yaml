@@ -11,6 +11,8 @@ rplidar:
     scan_frequency: 10.0
 
 # BNO055 IMU Settings
+# Keep the node ON (required for Mini). UART is flaky: 20 Hz, skip garbage
+# samples. Do not set data_query_frequency back to 100.
 bno055:
   ros__parameters:
     active: true
@@ -18,8 +20,8 @@ bno055:
     connection_type: "uart"
     uart_port: "/dev/bno055"
     uart_baudrate: 115200
-    uart_timeout: 0.1
-    data_query_frequency: 100
+    uart_timeout: 0.2
+    data_query_frequency: 20
     calib_status_frequency: 0.1
     frame_id: "imu_link"
     operation_mode: 0x0C

@@ -273,9 +273,19 @@ bool PlannerServer::isServerInactive(
 
 void PlannerServer::waitForCostmap()
 {
-  // Don't compute a plan until costmap is valid (after clear costmap)
+  // After ClearEntireCostmap, layers set current_=false until the next
+  // update. Humble's original loop had no timeout and did not check
+  // rclcpp::ok(), so a return-trip plan that cleared the map then lost
+  // TF would spin forever — Ctrl+C only SIGKILLs planner_server.
   rclcpp::Rate r(100);
-  while (!costmap_ros_->isCurrent()) {
+  const auto deadline = now() + rclcpp::Duration::from_seconds(2.0);
+  while (rclcpp::ok() && !costmap_ros_->isCurrent()) {
+    if (now() > deadline) {
+      RCLCPP_WARN(
+        get_logger(),
+        "Costmap not current after 2 s; planning with the last map");
+      break;
+    }
     r.sleep();
   }
 }

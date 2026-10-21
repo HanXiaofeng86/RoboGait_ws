@@ -5,7 +5,8 @@
   <version>0.1.0</version>
   <description>
     Pure Nav2 MPPI navigation stack for Rover Robotics Mini (Mode 1: RViz goal).
-    Independent of robot_simple_commander (Mode 2 has its own bringup).
+    Independent Nav2 bringup for Mode 2; Mini hardware Includes
+    rover_mini_hardware (lidar RESET).
   </description>
   <maintainer email="robogait@todo.todo">robogait</maintainer>
   <license>Apache-2.0</license>

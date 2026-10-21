@@ -1,17 +1,30 @@
 # robogait_perception
 
-**Mode B** — Orbbec/Nuitrack → `user_raw`.
+**Mode B** — person in front of the Femto Mega. Two front-ends, **one camera owner**.
 
-## Layout
+| `person_source` | What it is |
+|-----------------|------------|
+| **`nuitrack`** | **Gait / gimbal skeleton** (old working method). `orbbec_person_publisher` / `nuitrack_person_node` from `~/rover_workspace_final`. Lock point = **torso**. |
+| **`sdk`** | Orbbec K4A wrapper point cloud / color (teacher demo). Azure k4abt is **off** (`enable_body: false`) — this NUC has Intel Iris Xe, no CUDA; CPU body tracking never locks a pelvis. |
 
-```text
-config/                 # parameters
-robogait_perception/
-  nodes/                # ros2 run nodes (distance_orbbec)
-```
+Both publish `/orbbec/person_position`, `/orbbec/person_center_pixel`, `/orbbec/num_users`. `distance_orbbec` turns those into `user_raw` (x right, y up, z forward) for the gimbal / follow stack.
 
-No standalone launch; started by `test_gimbal` / `person_layer` / `person_follow`.
+**Do not start SDK and Nuitrack at the same time** — they open the same USB camera.
 
 ```bash
-ros2 run robogait_perception distance_orbbec
+# Tracking / gait (default for test_gimbal). Overlay first:
+source ~/rover_workspace_final/install/setup.bash
+source ~/RoboGait_ws/install/setup.bash
+ros2 launch robogait_perception person_source.launch.py person_source:=nuitrack
+
+# Point cloud only (no Nuitrack, no k4abt)
+ros2 launch robogait_perception person_source.launch.py person_source:=sdk
+```
+
+RViz Fixed Frame: `base_link`. This launch is **view only** (no Dynamixel). To have the camera follow you:
+
+```bash
+source ~/rover_workspace_final/install/setup.bash
+source ~/RoboGait_ws/install/setup.bash
+ros2 launch robogait_gimbal test_gimbal.launch.py
 ```

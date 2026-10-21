@@ -38,7 +38,10 @@
 #include "sl_lidar.h"
 #include "math.h"
 
+#include <chrono>
+#include <cstring>
 #include <signal.h>
+#include <thread>
 
 #ifndef _countof
 #define _countof(_Array) (int)(sizeof(_Array) / sizeof(_Array[0]))
@@ -135,29 +138,39 @@ class RPlidarNode : public rclcpp::Node
 
     bool checkRPLIDARHealth(ILidarDriver * drv)
     {
-        sl_result     op_result;
         sl_lidar_response_device_health_t healthinfo;
-        op_result = drv->getHealth(healthinfo);
-        if (SL_IS_OK(op_result)) { 
-            RCLCPP_INFO(this->get_logger(),"RPLidar health status : %d", healthinfo.status);
-            switch (healthinfo.status) {
-                case SL_LIDAR_STATUS_OK:
-                    RCLCPP_INFO(this->get_logger(),"RPLidar health status : OK.");
-                    return true;
-                case SL_LIDAR_STATUS_WARNING:
-                    RCLCPP_INFO(this->get_logger(),"RPLidar health status : Warning.");
-                    return true;
-                case SL_LIDAR_STATUS_ERROR:
-                    RCLCPP_ERROR(this->get_logger(),"Error, RPLidar internal error detected. Please reboot the device to retry.");
-                    return false;
-                default:
-                    RCLCPP_ERROR(this->get_logger(),"Error, Unknown internal error detected. Please reboot the device to retry.");
-                    return false;
+        memset(&healthinfo, 0, sizeof(healthinfo));
+        const int kMaxReset = 2;
+        for (int attempt = 0; attempt <= kMaxReset; ++attempt) {
+            sl_result op_result = drv->getHealth(healthinfo);
+            if (SL_IS_OK(op_result)) {
+                RCLCPP_INFO(this->get_logger(),"RPLidar health status : %d", healthinfo.status);
+                switch (healthinfo.status) {
+                    case SL_LIDAR_STATUS_OK:
+                        RCLCPP_INFO(this->get_logger(),"RPLidar health status : OK.");
+                        return true;
+                    case SL_LIDAR_STATUS_WARNING:
+                        RCLCPP_INFO(this->get_logger(),"RPLidar health status : Warning.");
+                        return true;
+                    case SL_LIDAR_STATUS_ERROR:
+                        break;
+                    default:
+                        break;
+                }
+            } else {
+                RCLCPP_WARN(this->get_logger(),"Cannot retrieve RPLidar health code: %x", op_result);
             }
-        } else {
-            RCLCPP_ERROR(this->get_logger(),"Error, cannot retrieve RPLidar health code: %x", op_result);
-            return false;
+            if (attempt == kMaxReset) {
+                RCLCPP_ERROR(this->get_logger(),"Error, RPLidar internal error detected. Please reboot the device to retry.");
+                return false;
+            }
+            RCLCPP_WARN(this->get_logger(),
+                "RPLidar health not OK (status=%d). Soft-reset %d/%d then retry...",
+                static_cast<int>(healthinfo.status), attempt + 1, kMaxReset);
+            drv->reset();
+            std::this_thread::sleep_for(std::chrono::seconds(3));
         }
+        return false;
     }
 
     bool stop_motor(const std::shared_ptr<std_srvs::srv::Empty::Request> req,

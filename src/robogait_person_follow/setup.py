@@ -22,12 +22,13 @@ setup(
     zip_safe=True,
     maintainer='robogait',
     maintainer_email='robogait@todo.todo',
-    description='Mode B: person → Nav2 goal; pure MPPI chassis velocity (Python).',
+    description='Mode B: person follow. B1/B2 Nav2 goal; B3 straight distance PID (Python).',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
             'distance_filter = robogait_person_follow.nodes.distance_filter:main',
             'person_nav_goal = robogait_person_follow.nodes.person_nav_goal:main',
+            'straight_follow = robogait_person_follow.nodes.straight_follow:main',
         ],
     },
 )

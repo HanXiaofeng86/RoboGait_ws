@@ -1,0 +1,4 @@
+# Change this name (no .yaml).
+# Record saves to recorded/<name>.yaml
+# Follow loads recorded/<name>.yaml (else paths/<name>.yaml)
+name: mini_lab1

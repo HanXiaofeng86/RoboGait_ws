@@ -1,9 +1,46 @@
-person_position_topic: /orbbec/person_position
-person_center_pixel_topic: /orbbec/person_center_pixel
-num_users_topic: /orbbec/num_users
-default_center_pixel: 320
-timeout_sec: 0.5
-min_z_m: 0.15
-max_z_m: 15.0
-hold_last_valid_sec: 1.2
-publish_period_sec: 0.02
+distance_orbbec:
+  ros__parameters:
+    person_position_topic: /orbbec/person_position
+    person_center_pixel_topic: /orbbec/person_center_pixel
+    num_users_topic: /orbbec/num_users
+    default_center_pixel: 320
+    timeout_sec: 0.5
+    min_z_m: 0.15
+    max_z_m: 15.0
+    hold_last_valid_sec: 0.4
+    publish_period_sec: 0.1
+
+person_sdk:
+  ros__parameters:
+    frame_id: orbbec_link
+    publish_static_tf: false
+    camera_tf_parent: payload_link
+    camera_xyz: [0.03, 0.0, 0.27]
+    camera_rpy: [0.0, 0.12, 0.0]
+    cloud_stride: 2
+    # true = /orbbec/points 只留人体（骨架分割；没有骨架则用躯干附近圆柱）。
+    # 给老师看整间房：改成 false。彩图/深度图不受影响。
+    cloud_person_only: true
+    cloud_person_radius_m: 0.55
+    cloud_person_floor_margin_m: 0.95
+    depth_mode: nfov_unbinned
+    max_range_m: 4.0
+    # k4abt on this NUC is CPU-only (Iris Xe, no CUDA). It never locks a
+    # skeleton — gimbal/gait use Nuitrack instead. Keep false so SDK is a
+    # point-cloud demo and does not burn CPU. True only if you explicitly
+    # test Azure body tracking.
+    enable_body: false
+    enable_person_marker: true
+    # Gait lock point if enable_body is on. Nuitrack uses torso (same User.msg).
+    # Fallback order: pelvis → spine_navel → spine_chest → neck → head.
+    # Depth-blob fallback is only “someone is there” for pan; it does not tilt.
+    lock_joint: pelvis
+    body_cpu: true
+    # CPU skeleton is slower than 15 Hz. 0 never pops a body frame (stuck on
+    # joint=depth). Unused while enable_body is false.
+    body_timeout_ms: 80
+    enable_depth_person_fallback: true
+    fallback_min_points: 40
+    fallback_min_z_m: 0.5
+    fallback_max_z_m: 3.5
+    pixel_image_width: 640

@@ -1,4 +1,4 @@
-# EKF fusing wheel odometry + IMU -> /odometry/filtered and odom->base_link TF.
+# EKF fusing wheel odometry + IMU yaw rate -> /odometry/filtered.
 # Based on the upstream roverrobotics localization_ekf.yaml, kept in this
 # package so RoboGait tuning stays separate from the upstream repository.
 ekf_filter_node:
@@ -7,7 +7,10 @@ ekf_filter_node:
         frequency: 30.0
         sensor_timeout: 1.0
         two_d_mode: true
-        transform_time_offset: 0.0
+        # Date odom->base_link slightly in the future so RViz/AMCL can
+        # look up lidar stamps (~10–40 ms ahead of EKF). 0.1 s made the
+        # laser look late after 2D Pose Estimate; 0.05 is enough.
+        transform_time_offset: 0.05
         transform_timeout: 0.0
         print_diagnostics: true
         debug: false
@@ -32,7 +35,7 @@ ekf_filter_node:
         odom0_differential: false
         odom0_relative: true
 
-        # IMU: fuse yaw rate.
+        # IMU: fuse yaw rate only. Driver skips UART garbage (|wz| huge).
         imu0: imu/data
         imu0_config: [false, false, false,
                       false, false, false,

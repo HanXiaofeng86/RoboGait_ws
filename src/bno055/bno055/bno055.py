@@ -29,6 +29,7 @@
 
 import sys
 import threading
+import time
 
 from bno055.connectors.i2c import I2C
 from bno055.connectors.uart import UART
@@ -79,8 +80,17 @@ class Bno055Node(Node):
         # Instantiate the sensor Service API:
         self.sensor = SensorService(self, connector, self.param)
 
-        # configure imu
-        self.sensor.configure()
+        # UART often has leftover bytes after a previous crash. Retry in this
+        # process so launch does not respawn and double-open /dev/bno055.
+        while True:
+            try:
+                self.sensor.configure()
+                break
+            except Exception as e:  # noqa: B902
+                self.get_logger().warn('IMU configure failed, retry in 2s: %s' % e)
+                if hasattr(connector, 'flush'):
+                    connector.flush()
+                time.sleep(2.0)
 
 
 def main(args=None):
@@ -95,13 +105,18 @@ def main(args=None):
 
         # Create lock object to prevent overlapping data queries
         lock = threading.Lock()
+        last_fail_log = [0.0]
+
+        def _throttled_warn(msg):
+            now = time.monotonic()
+            if now - last_fail_log[0] < 5.0:
+                return
+            last_fail_log[0] = now
+            node.get_logger().warn(msg)
 
         def read_data():
             """Periodic data_query_timer executions to retrieve sensor IMU data."""
             if lock.locked():
-                # critical area still locked
-                # that means that the previous data query is still being processed
-                node.get_logger().warn('Message communication in progress - skipping query cycle')
                 return
 
             # Acquire lock before entering critical area to prevent overlapping data queries
@@ -116,18 +131,16 @@ def main(args=None):
                 # division by zero in get_sensor_data, return
                 return
             except Exception as e:  # noqa: B902
-                node.get_logger().warn('Receiving sensor data failed with %s:"%s"'
-                                       % (type(e).__name__, e))
+                if hasattr(node.sensor.con, 'flush'):
+                    node.sensor.con.flush()
+                _throttled_warn('Receiving sensor data failed with %s:"%s"'
+                                % (type(e).__name__, e))
             finally:
                 lock.release()
 
         def log_calibration_status():
             """Periodic logging of calibration data (quality indicators)."""
             if lock.locked():
-                # critical area still locked
-                # that means that the previous data query is still being processed
-                node.get_logger().warn('Message communication in progress - skipping query cycle')
-                # traceback.print_exc()
                 return
 
             # Acquire lock before entering critical area to prevent overlapping data queries
@@ -136,9 +149,8 @@ def main(args=None):
                 # perform synchronized block:
                 node.sensor.get_calib_status()
             except Exception as e:  # noqa: B902
-                node.get_logger().warn('Receiving calibration status failed with %s:"%s"'
-                                       % (type(e).__name__, e))
-                # traceback.print_exc()
+                _throttled_warn('Receiving calibration status failed with %s:"%s"'
+                                % (type(e).__name__, e))
             finally:
                 lock.release()
 

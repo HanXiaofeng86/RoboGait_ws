@@ -70,7 +70,7 @@ def generate_launch_description():
     ld.add_action(DeclareLaunchArgument('slam', default_value='False'))
     ld.add_action(DeclareLaunchArgument(
         'amcl', default_value='False',
-        description='False=static map→odom (easy teleop/record); True=AMCL'))
+        description='False=static map→odom; True=AMCL (follow launch sets True)'))
     ld.add_action(DeclareLaunchArgument(
         'params_file', default_value=_share('config/nav2_mppi_params.yaml')))
     ld.add_action(DeclareLaunchArgument(

@@ -1,4 +1,6 @@
 Panels:
+  - Class: robot_simple_commander/Speed
+    Name: Speed
   - Class: rviz_common/Displays
     Help Height: 0
     Name: Displays
@@ -71,7 +73,7 @@ Visualization Manager:
       Value: false
       Visual Enabled: true
     - Class: rviz_default_plugins/TF
-      Enabled: true
+      Enabled: false
       Frame Timeout: 15
       Frames:
         All Enabled: false
@@ -145,8 +147,8 @@ Visualization Manager:
       Axis: Z
       Channel Name: intensity
       Class: rviz_default_plugins/LaserScan
-      Color: 255; 255; 255
-      Color Transformer: Intensity
+      Color: 255; 0; 0
+      Color Transformer: FlatColor
       Decay Time: 0
       Enabled: true
       Invert Rainbow: false
@@ -157,8 +159,8 @@ Visualization Manager:
       Name: LaserScan
       Position Transformer: XYZ
       Selectable: true
-      Size (Pixels): 3
-      Size (m): 0.009999999776482582
+      Size (Pixels): 5
+      Size (m): 0.05
       Style: Points
       Topic:
         Depth: 5
@@ -166,7 +168,7 @@ Visualization Manager:
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /scan
+        Value: /scan_viz
       Use Fixed Frame: true
       Use rainbow: true
       Value: true

@@ -129,7 +129,7 @@ protected:
 
   /**
    * @brief Wait for costmap to be valid with updated sensor data or repopulate after a
-   * clearing recovery. Blocks until true without timeout.
+   * clearing recovery. Times out after 2 s so Ctrl+C can stop planner_server.
    */
   void waitForCostmap();
 

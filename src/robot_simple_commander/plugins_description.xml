@@ -1,0 +1,17 @@
+<library path="robot_simple_commander_follow_panel">
+  <class name="robot_simple_commander/Follow"
+         type="robot_simple_commander::FollowPanel"
+         base_class_type="rviz_common::Panel">
+    <description>Start, return to the path start, or stop a recorded path.</description>
+  </class>
+  <class name="robot_simple_commander/Speed"
+         type="robot_simple_commander::SpeedPanel"
+         base_class_type="rviz_common::Panel">
+    <description>Slider for the navigation forward speed ceiling.</description>
+  </class>
+  <class name="robot_simple_commander/MapSave"
+         type="robot_simple_commander::MapSavePanel"
+         base_class_type="rviz_common::Panel">
+    <description>Save the current /map to a yaml and pgm path.</description>
+  </class>
+</library>

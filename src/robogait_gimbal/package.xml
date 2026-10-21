@@ -3,7 +3,7 @@
 <package format="3">
   <name>robogait_gimbal</name>
   <version>0.1.0</version>
-  <description>Mode B: Dynamixel gimbal — keep person in camera FOV (Python).</description>
+  <description>Mode B: Dynamixel pan+tilt gimbal — keep person in camera FOV (Python).</description>
   <maintainer email="robogait@todo.todo">robogait</maintainer>
   <license>Apache-2.0</license>
 
@@ -11,6 +11,7 @@
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>robogait_person_interfaces</exec_depend>
   <exec_depend>dynamixel_sdk</exec_depend>
   <exec_depend>launch</exec_depend>
