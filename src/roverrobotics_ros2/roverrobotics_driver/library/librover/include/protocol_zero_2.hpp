@@ -11,7 +11,7 @@ class RoverRobotics::Zero2ProtocolObject
 {
 private:
   std::unique_ptr<Utilities::PersistentParams> persistent_params_;
-  const std::string ROBOT_PARAM_PATH = strcat(std::getenv("HOME"), "/robot.config");
+  const std::string ROBOT_PARAM_PATH = robot_config_path();
   Control::robot_geometry robot_geometry_ = {.intra_axle_distance = 0.2794,
                                              .wheel_base = 0.3683,
                                              .wheel_radius = 0.2667,

@@ -19,6 +19,7 @@ class RoverRobotics::CommSerial : public RoverRobotics::CommBase {
    */
   CommSerial(const char *device, std::function<void(std::vector<uint8_t>)>,
              std::vector<uint8_t>);
+  ~CommSerial() override;
   /*
    * @brief Write data to Serial Device
    * by accepting a vector of unsigned int 32 and convert it to a byte stream
@@ -42,7 +43,8 @@ class RoverRobotics::CommSerial : public RoverRobotics::CommBase {
  private:
   std::mutex serial_write_mutex_;
   int read_size_;
-  int serial_port_;
+  int serial_port_ = -1;
+  std::atomic<bool> running_{true};
   std::atomic<bool> is_connected_;
   std::thread serial_read_thread_;
   const int TIMEOUT_MS_ = 1000; //1 sec timeout

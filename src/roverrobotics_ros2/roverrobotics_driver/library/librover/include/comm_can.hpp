@@ -19,6 +19,7 @@ class RoverRobotics::CommCan : public RoverRobotics::CommBase {
    */
   CommCan(const char *device, std::function<void(std::vector<uint8_t>)>,
           std::vector<uint8_t>);
+  ~CommCan() override;
   /*
    * @brief Write data to Can Device
    * by accepting a vector of unsigned int 32 and convert it to a byte stream
@@ -44,7 +45,8 @@ class RoverRobotics::CommCan : public RoverRobotics::CommBase {
   struct can_frame frame;
   struct can_frame robot_frame;
   struct ifreq ifr;
-  int fd;
+  int fd = -1;
+  std::atomic<bool> running_{true};
   int read_size_;
   int Can_port_;
   const int CAN_MSG_SIZE_ = 9;

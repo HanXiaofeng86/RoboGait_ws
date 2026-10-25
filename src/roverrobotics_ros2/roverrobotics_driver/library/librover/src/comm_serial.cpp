@@ -58,6 +58,17 @@ CommSerial::CommSerial(const char *device,
       [this, parsefunction]() { this->read_device_loop(parsefunction); });
 }
 
+CommSerial::~CommSerial() {
+  running_ = false;
+  if (serial_port_ >= 0) {
+    close(serial_port_);
+    serial_port_ = -1;
+  }
+  if (serial_read_thread_.joinable()) {
+    serial_read_thread_.join();
+  }
+}
+
 void CommSerial::write_to_device(std::vector<uint8_t> msg) {
   serial_write_mutex_.lock();
   if (serial_port_ >= 0) {
@@ -75,9 +86,15 @@ void CommSerial::read_device_loop(
   std::chrono::milliseconds time_last =
       std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::system_clock::now().time_since_epoch());
-  while (true) {
+  while (running_) {
+    if (read_size_ <= 0 || serial_port_ < 0) {
+      break;
+    }
     uint8_t read_buf[read_size_];
     int num_bytes = read(serial_port_, &read_buf, read_size_);
+    if (!running_) {
+      break;
+    }
     std::chrono::milliseconds time_now =
         std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch());

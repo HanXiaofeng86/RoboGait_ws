@@ -24,6 +24,22 @@ namespace RoverRobotics
         Can_read_thread_ = std::thread([this, parsefunction]() { this->read_device_loop(parsefunction); });
     }
 
+    CommCan::~CommCan()
+    {
+        running_ = false;
+        if (fd >= 0) {
+            /* Unblock the read thread. Do not close until it has left read(). */
+            shutdown(fd, SHUT_RDWR);
+        }
+        if (Can_read_thread_.joinable()) {
+            Can_read_thread_.join();
+        }
+        if (fd >= 0) {
+            close(fd);
+            fd = -1;
+        }
+    }
+
     void CommCan::write_to_device(std::vector<uint8_t> msg) 
     {
         Can_write_mutex_.lock();
@@ -45,13 +61,19 @@ namespace RoverRobotics
     {
         std::chrono::milliseconds time_last = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
         
-        while (true) 
+        while (running_) 
         {
             int num_bytes = read(fd, &robot_frame, sizeof(robot_frame));
+            if (!running_) {
+                break;
+            }
             std::chrono::milliseconds time_now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
             
             if (num_bytes <= 0) 
             {
+                if (num_bytes < 0 && (errno == EBADF || errno == EINVAL || errno == ENOTCONN)) {
+                    break;
+                }
                 if ((time_now - time_last).count() > TIMEOUT_MS_) 
                 {
                     is_connected_ = false;

@@ -38,6 +38,7 @@ class CommBase;
 }
 class RoverRobotics::CommBase {
  public:
+  virtual ~CommBase() = default;
   /*
    * @brief Pure Virtual Interface of Write To Communication Device.
    * The implementation of this function should accept a vector of unsigned

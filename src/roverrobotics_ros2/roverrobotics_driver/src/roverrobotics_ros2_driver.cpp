@@ -242,13 +242,19 @@ RobotDriver::RobotDriver() : Node("roverrobotics", rclcpp::NodeOptions().use_int
   }
 }
 
+namespace {
+bool robot_streaming(const std::unique_ptr<RoverRobotics::BaseProtocolObject> &robot) {
+  return robot && robot->is_connected();
+}
+}  // namespace
+
 void RobotDriver::publish_robot_info() {
   // RCLCPP_INFO(get_logger(), "Updating Robot Info");
-  if (!robot_->is_connected()) {
-    RCLCPP_FATAL(
-        get_logger(),
-        "Did not receive any data from the robot or the data is stale. Check that the robot is connected to the computer and that permissions are set correctly.");
-    rclcpp::shutdown();
+  if (!robot_streaming(robot_)) {
+    RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "No data from the robot yet. Check that can0 is up and the rover is powered.");
+    return;
   }
   robot_data_ = robot_->info_request();
   std_msgs::msg::Float32MultiArray robot_info;
@@ -264,11 +270,11 @@ void RobotDriver::publish_robot_info() {
 
 void RobotDriver::publish_robot_status() {
   // std::cerr << robot_->is_connected() << std::endl;
-  if (!robot_->is_connected()) {
-    RCLCPP_FATAL(
-        get_logger(),
-        "Did not receive any data from the robot or the data is stale. Check that the robot is connected to the computer and that permissions are set correctly.");
-    rclcpp::shutdown();
+  if (!robot_streaming(robot_)) {
+    RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "No data from the robot yet. Check that can0 is up and the rover is powered.");
+    return;
   }
   // RCLCPP_INFO(get_logger(), "Updating Robot Status");
   robot_data_ = robot_->status_request();
@@ -329,11 +335,8 @@ void RobotDriver::publish_robot_status() {
 }
 
 void RobotDriver::update_odom() {
-  if (!robot_->is_connected()) {
-    RCLCPP_FATAL(
-        get_logger(),
-        "Did not receive any data from the robot or the data is stale. Check that the robot is connected to the computer and that permissions are set correctly.");
-    rclcpp::shutdown();
+  if (!robot_streaming(robot_)) {
+    return;
   }
   robot_data_ = robot_->status_request();
   
@@ -421,11 +424,8 @@ void RobotDriver::update_odom() {
 
 void RobotDriver::velocity_event_callback(
     geometry_msgs::msg::Twist::ConstSharedPtr msg) {
-  if (!robot_->is_connected()) {
-    RCLCPP_FATAL(
-        get_logger(),
-        "Did not receive any data from the robot or the data is stale. Check that the robot is connected to the computer and that permissions are set correctly.");
-    rclcpp::shutdown();
+  if (!robot_streaming(robot_)) {
+    return;
   }
   static double speeddata[3];
   speeddata[0] = msg->linear.x;
@@ -436,12 +436,18 @@ void RobotDriver::velocity_event_callback(
 
 void RobotDriver::trim_event_callback(
     std_msgs::msg::Float32::ConstSharedPtr &msg) {
+  if (!robot_) {
+    return;
+  }
   RCLCPP_INFO(get_logger(), "Trim Event triggered");
   robot_->update_drivetrim(msg->data);
 }
 
 void RobotDriver::estop_trigger_event_callback(
     std_msgs::msg::Bool::ConstSharedPtr &msg) {
+  if (!robot_) {
+    return;
+  }
   if (msg->data == true) {
     RCLCPP_INFO(get_logger(), "Software Estop activated");
     estop_state_ = true;
@@ -451,6 +457,9 @@ void RobotDriver::estop_trigger_event_callback(
 
 void RobotDriver::estop_reset_event_callback(
     std_msgs::msg::Bool::ConstSharedPtr &msg) {
+  if (!robot_) {
+    return;
+  }
   if (msg->data == true) {
     RCLCPP_INFO(get_logger(), "Software Estop deactivated");
     estop_state_ = false;
@@ -460,6 +469,9 @@ void RobotDriver::estop_reset_event_callback(
 
 void RobotDriver::robot_info_request_callback(
     std_msgs::msg::Bool::ConstSharedPtr &msg) {
+  if (!robot_) {
+    return;
+  }
   if (msg->data == true) {
     publish_robot_info();
   }
