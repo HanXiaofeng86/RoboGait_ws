@@ -5,7 +5,7 @@
 
 一次只开一套程序。开下一套之前，先在上一套的终端按 **Ctrl+C**，等到命令提示符回来。
 
-每个新终端都先执行（让本工作空间盖过 `.bashrc` 里的旧空间）：
+每个新终端都先执行（让本工作空间盖过 `.bashrc` 里的旧空间，也盖过 `/opt/ros/jazzy` 里的 Nav2）。导航跑的是仓库里的 `src/navigation2`，改这份源码后要重新 `colcon build` 再 source。
 
 ```bash
 cd ~/RoboGait_ws
