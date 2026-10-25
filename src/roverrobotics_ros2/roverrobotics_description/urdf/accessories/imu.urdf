@@ -15,12 +15,12 @@
             <visualize>true</visualize>
             <topic>imu/data</topic>
             <enable_metrics>true</enable_metrics>
-            <ignition_frame_id>imu_link</ignition_frame_id>
+            <gz_frame_id>imu_link</gz_frame_id>
         </sensor>
     </gazebo>
 
     <gazebo>
-        <plugin filename="libignition-gazebo-imu-system" name="ignition::gazebo::systems::Imu"/>
+        <plugin filename="libgz-sim-imu-system" name="gz::sim::systems::Imu"/>
     </gazebo>
 
 </robot>

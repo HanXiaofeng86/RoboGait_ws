@@ -15,6 +15,7 @@
 // Modified by: Shivang Patel (shivaan14@gmail.com)
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -38,9 +39,22 @@ CostmapTopicCollisionChecker::CostmapTopicCollisionChecker(
   std::string name)
 : name_(name),
   costmap_sub_(costmap_sub),
-  footprint_sub_(footprint_sub),
+  footprint_sub_(&footprint_sub),
   collision_checker_(nullptr)
 {}
+
+CostmapTopicCollisionChecker::CostmapTopicCollisionChecker(
+  CostmapSubscriber & costmap_sub,
+  std::string footprint_string,
+  std::string name)
+: name_(name),
+  costmap_sub_(costmap_sub),
+  collision_checker_(nullptr)
+{
+  if (!makeFootprintFromString(footprint_string, footprint_)) {
+    throw CollisionCheckerException("Failed to create footprint from string");
+  }
+}
 
 bool CostmapTopicCollisionChecker::isCollisionFree(
   const geometry_msgs::msg::Pose2D & pose,
@@ -74,6 +88,8 @@ double CostmapTopicCollisionChecker::scorePose(
       throw CollisionCheckerException(e.what());
     }
   }
+  auto costmap = collision_checker_.getCostmap();
+  std::lock_guard<Costmap2D::mutex_t> costmap_lock(*costmap->getMutex());
 
   unsigned int cell_x, cell_y;
   if (!collision_checker_.worldToMap(pose.x, pose.y, cell_x, cell_y)) {
@@ -90,7 +106,10 @@ Footprint CostmapTopicCollisionChecker::getFootprint(
 {
   if (fetch_latest_footprint) {
     std_msgs::msg::Header header;
-    if (!footprint_sub_.getFootprintInRobotFrame(footprint_, header)) {
+
+    // if footprint_sub_ was not initialized (alternative constructor), we are using the
+    // footprint built from the footprint_string alternative constructor argument.
+    if (footprint_sub_ && !footprint_sub_->getFootprintInRobotFrame(footprint_, header)) {
       throw CollisionCheckerException("Current footprint not available.");
     }
   }

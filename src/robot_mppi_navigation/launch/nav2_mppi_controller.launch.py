@@ -30,6 +30,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PythonExpression
 from launch_ros.actions import Node
+from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml
 
 
@@ -86,14 +87,18 @@ def generate_launch_description():
         'velocity_smoother',
     ]
 
-    configured_params = RewrittenYaml(
-        source_file=params_file,
-        root_key='',
-        param_rewrites={
-            'use_sim_time': use_sim_time,
-            'autostart': autostart,
-        },
-        convert_types=True,
+    # Jazzy launch_ros only loads extensionless RewrittenYaml temps via ParameterFile.
+    configured_params = ParameterFile(
+        RewrittenYaml(
+            source_file=params_file,
+            root_key='',
+            param_rewrites={
+                'use_sim_time': use_sim_time,
+                'autostart': autostart,
+            },
+            convert_types=True,
+        ),
+        allow_substs=True,
     )
 
     ld = LaunchDescription()

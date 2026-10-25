@@ -4,7 +4,7 @@
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash && source install/setup.bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch robot_slam_mapping slam_mapping.launch.py
 ```
 

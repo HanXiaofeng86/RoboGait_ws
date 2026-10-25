@@ -9,7 +9,7 @@
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ```
 

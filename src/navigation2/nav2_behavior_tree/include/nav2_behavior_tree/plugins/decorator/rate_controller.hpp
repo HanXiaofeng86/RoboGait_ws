@@ -18,13 +18,20 @@
 #include <chrono>
 #include <string>
 
-#include "behaviortree_cpp_v3/decorator_node.h"
+#include "behaviortree_cpp/decorator_node.h"
 
 namespace nav2_behavior_tree
 {
 
 /**
  * @brief A BT::DecoratorNode that ticks its child at a specified rate
+ *
+ * Usage in XML:
+ * @code
+ * <RateController hz="1.0">
+ *     <!--Add tree components here-->
+ * </RateController>
+ * @endcode
  */
 class RateController : public BT::DecoratorNode
 {
@@ -37,6 +44,11 @@ public:
   RateController(
     const std::string & name,
     const BT::NodeConfiguration & conf);
+
+  /**
+   * @brief Function to read parameters and initialize class variables
+   */
+  void initialize();
 
   /**
    * @brief Creates list of BT ports

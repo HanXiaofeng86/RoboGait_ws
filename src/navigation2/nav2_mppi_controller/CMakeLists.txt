@@ -12,8 +12,8 @@ set(XTENSOR_USE_XSIMD 1)
 # set(XTENSOR_DEFAULT_TRAVERSAL row_major)  # row_major, column_major
 
 find_package(ament_cmake REQUIRED)
-find_package(xtensor REQUIRED)
 find_package(xsimd REQUIRED)
+find_package(xtensor REQUIRED)
 
 include_directories(
   include
@@ -83,19 +83,25 @@ add_library(mppi_critics SHARED
   src/critics/goal_critic.cpp
   src/critics/goal_angle_critic.cpp
   src/critics/path_align_critic.cpp
-  src/critics/path_align_legacy_critic.cpp
   src/critics/path_follow_critic.cpp
   src/critics/path_angle_critic.cpp
   src/critics/prefer_forward_critic.cpp
   src/critics/twirling_critic.cpp
   src/critics/constraint_critic.cpp
   src/critics/velocity_deadband_critic.cpp
+  src/critics/mecanum_critic.cpp
+  src/critics/omni_constraint_critic.cpp
 )
 
 set(libraries mppi_controller mppi_critics)
 
 foreach(lib IN LISTS libraries)
-  target_compile_options(${lib} PUBLIC -fconcepts)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    # Clang: use C++20 and optimization, omit -fconcepts
+    target_compile_features(${lib} PUBLIC cxx_std_20)
+  else()
+    target_compile_options(${lib} PUBLIC -fconcepts)
+  endif()
   target_include_directories(${lib} PUBLIC ${xsimd_INCLUDE_DIRS})  #  ${OpenMP_INCLUDE_DIRS}
   target_link_libraries(${lib} xtensor xtensor::optimize xtensor::use_xsimd)
   ament_target_dependencies(${lib} ${dependencies_pkgs})

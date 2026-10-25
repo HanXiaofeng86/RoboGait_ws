@@ -21,8 +21,10 @@
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 
-#include "behaviortree_cpp_v3/decorator_node.h"
+#include "behaviortree_cpp/decorator_node.h"
 
+#include "behaviortree_cpp/json_export.h"
+#include "nav2_behavior_tree/json_utils.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 namespace nav2_behavior_tree
@@ -31,6 +33,13 @@ namespace nav2_behavior_tree
 /**
  * @brief A BT::DecoratorNode that subscribes to a goal topic and updates
  * the current goal on the blackboard
+ *
+ * Usage in XML:
+ * @code
+ * <GoalUpdater input_goal="{goal}" output_goal="{goal}">
+ *     <!--Add tree components here-->
+ * </GoalUpdater>
+ * @endcode
  */
 class GoalUpdater : public BT::DecoratorNode
 {
@@ -50,6 +59,9 @@ public:
    */
   static BT::PortsList providedPorts()
   {
+    // Register JSON definitions for the types used in the ports
+    BT::RegisterJsonDefinition<geometry_msgs::msg::PoseStamped>();
+
     return {
       BT::InputPort<geometry_msgs::msg::PoseStamped>("input_goal", "Original Goal"),
       BT::OutputPort<geometry_msgs::msg::PoseStamped>(

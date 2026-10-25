@@ -22,9 +22,9 @@ void GoalAngleCritic::initialize()
   auto getParam = parameters_handler_->getParamGetter(name_);
 
   getParam(power_, "cost_power", 1);
-  getParam(weight_, "cost_weight", 3.0);
+  getParam(weight_, "cost_weight", 3.0f);
 
-  getParam(threshold_to_consider_, "threshold_to_consider", 0.5);
+  getParam(threshold_to_consider_, "threshold_to_consider", 0.5f);
   getParam(symmetric_yaw_tolerance_, "symmetric_yaw_tolerance", false);
 
   RCLCPP_INFO(
@@ -37,7 +37,7 @@ void GoalAngleCritic::initialize()
 void GoalAngleCritic::score(CriticData & data)
 {
   if (!enabled_ || !utils::withinPositionGoalTolerance(
-      threshold_to_consider_, data.state.pose.pose, data.path))
+      threshold_to_consider_, data.state.pose.pose, data.goal))
   {
     return;
   }
@@ -52,16 +52,17 @@ void GoalAngleCritic::score(CriticData & data)
     // For symmetric robots: use minimum distance to either goal orientation or goal + 180°
     const float symmetric_goal_yaw = angles::normalize_angle(goal_yaw + M_PI);
     auto symmetric_distances =
-      xt::eval(
-      xt::fabs(
-        utils::shortest_angular_distance(
-          data.trajectories.yaws,
-          symmetric_goal_yaw)));
+      xt::eval(xt::fabs(utils::shortest_angular_distance(data.trajectories.yaws,
+        symmetric_goal_yaw)));
     angular_distances = xt::eval(xt::minimum(angular_distances, symmetric_distances));
   }
 
-  data.costs += xt::pow(
-    xt::mean(angular_distances, {1}) * weight_, power_);
+  if (power_ > 1u) {
+    data.costs += xt::pow(
+      xt::mean(angular_distances, {1}) * weight_, power_);
+  } else {
+    data.costs += xt::mean(angular_distances, {1}) * weight_;
+  }
 }
 
 }  // namespace mppi::critics

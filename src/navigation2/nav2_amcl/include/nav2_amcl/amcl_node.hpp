@@ -152,7 +152,8 @@ protected:
   std::recursive_mutex mutex_;
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::ConstSharedPtr map_sub_;
 #if NEW_UNIFORM_SAMPLING
-  static std::vector<std::pair<int, int>> free_space_indices;
+  struct Point2D { int32_t x; int32_t y; };
+  static std::vector<Point2D> free_space_indices;
 #endif
 
   // Transforms
@@ -278,9 +279,9 @@ protected:
   /*
    * @brief Create a laser object
    */
-  nav2_amcl::Laser * createLaserObject();
+  std::unique_ptr<nav2_amcl::Laser> createLaserObject();
   int scan_error_count_{0};
-  std::vector<nav2_amcl::Laser *> lasers_;
+  std::vector<std::unique_ptr<nav2_amcl::Laser>> lasers_;
   std::vector<bool> lasers_update_;
   std::map<std::string, int> frame_to_laser_;
   rclcpp::Time last_laser_received_ts_;
@@ -391,6 +392,7 @@ protected:
   double z_rand_;
   std::string scan_topic_{"scan"};
   std::string map_topic_{"map"};
+  bool freespace_downsampling_ = false;
 };
 
 }  // namespace nav2_amcl

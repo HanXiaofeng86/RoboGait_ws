@@ -1,6 +1,6 @@
 # RoboGait_ws
 
-ROS 2 Humble: pure-robot navigation (`robot_*`) + person follow (`robogait_*`).
+ROS 2 Jazzy: pure-robot navigation (`robot_*`) + person follow (`robogait_*`).
 
 ## Package prefix
 
@@ -35,7 +35,7 @@ ROS 2 Humble: pure-robot navigation (`robot_*`) + person follow (`robogait_*`).
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select robot_mppi_navigation robot_simple_commander --symlink-install
 source install/setup.bash
 

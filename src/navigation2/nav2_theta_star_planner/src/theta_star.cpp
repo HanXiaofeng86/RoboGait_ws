@@ -13,6 +13,7 @@
 //  limitations under the License.
 
 #include <vector>
+#include "nav2_core/planner_exceptions.hpp"
 #include "nav2_theta_star_planner/theta_star.hpp"
 
 namespace theta_star
@@ -26,6 +27,7 @@ ThetaStar::ThetaStar()
   allow_unknown_(true),
   size_x_(0),
   size_y_(0),
+  terminal_checking_interval_(5000),
   index_generated_(0)
 {
   exp_node = new tree_node;
@@ -43,7 +45,7 @@ void ThetaStar::setStartAndGoal(
   dst_ = {static_cast<int>(d[0]), static_cast<int>(d[1])};
 }
 
-bool ThetaStar::generatePath(std::vector<coordsW> & raw_path)
+bool ThetaStar::generatePath(std::vector<coordsW> & raw_path, std::function<bool()> cancel_checker)
 {
   resetContainers();
   addToNodesData(index_generated_);
@@ -53,33 +55,31 @@ bool ThetaStar::generatePath(std::vector<coordsW> & raw_path)
     src_g_cost + src_h_cost};
   queue_.push({&nodes_data_[index_generated_]});
   addIndex(src_.x, src_.y, &nodes_data_[index_generated_]);
-  tree_node * curr_data = &nodes_data_[index_generated_];
   index_generated_++;
   nodes_opened = 0;
 
   while (!queue_.empty()) {
+    tree_node * curr_data = queue_.top();
+    queue_.pop();
     nodes_opened++;
 
+    if (nodes_opened % terminal_checking_interval_ == 0 && cancel_checker()) {
+      clearQueue();
+      throw nav2_core::PlannerCancelled("Planner was canceled");
+    }
+
     if (isGoal(*curr_data)) {
-      break;
+      backtrace(raw_path, curr_data);
+      clearQueue();
+      return true;
     }
 
     resetParent(curr_data);
     setNeighbors(curr_data);
-
-    curr_data = queue_.top();
-    queue_.pop();
   }
 
-  if (queue_.empty()) {
-    raw_path.clear();
-    return false;
-  }
-
-  backtrace(raw_path, curr_data);
-  clearQueue();
-
-  return true;
+  raw_path.clear();
+  return false;
 }
 
 void ThetaStar::resetParent(tree_node * curr_data)
@@ -258,4 +258,12 @@ void ThetaStar::initializePosn(int size_inc)
     node_position_.push_back(nullptr);
   }
 }
+
+void ThetaStar::clearStart()
+{
+  unsigned int mx_start = static_cast<unsigned int>(src_.x);
+  unsigned int my_start = static_cast<unsigned int>(src_.y);
+  costmap_->setCost(mx_start, my_start, nav2_costmap_2d::FREE_SPACE);
+}
+
 }  //  namespace theta_star

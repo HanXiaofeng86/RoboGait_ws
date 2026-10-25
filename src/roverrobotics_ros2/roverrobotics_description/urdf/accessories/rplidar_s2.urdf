@@ -27,7 +27,7 @@
         <sensor name='gpu_lidar' type='gpu_lidar'>
             <pose>0 0 0 0 0 0</pose>
             <topic>scan</topic>
-            <ignition_frame_id>lidar_link</ignition_frame_id>
+            <gz_frame_id>lidar_link</gz_frame_id>
             <update_rate>10</update_rate>
             <lidar>
                 <scan>
@@ -55,7 +55,7 @@
     </gazebo>
 
     <gazebo>    
-        <plugin filename="libignition-gazebo-sensors-system.so" name="ignition::gazebo::systems::Sensors">
+        <plugin filename="libgz-sim-sensors-system.so" name="gz::sim::systems::Sensors">
             <render_engine>ogre2</render_engine>
         </plugin>
     </gazebo>

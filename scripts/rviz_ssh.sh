@@ -44,7 +44,7 @@ if [[ -z "${XAUTHORITY:-}" ]]; then
   done
 fi
 
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 source "${HOME}/RoboGait_ws/install/setup.bash"
 
 exec rviz2 -d "${RVIZ_CONFIG}"

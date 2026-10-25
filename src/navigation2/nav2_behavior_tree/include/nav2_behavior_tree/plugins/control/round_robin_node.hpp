@@ -17,8 +17,8 @@
 
 #include <string>
 
-#include "behaviortree_cpp_v3/control_node.h"
-#include "behaviortree_cpp_v3/bt_factory.h"
+#include "behaviortree_cpp/control_node.h"
+#include "behaviortree_cpp/bt_factory.h"
 
 namespace nav2_behavior_tree
 {
@@ -49,7 +49,12 @@ namespace nav2_behavior_tree
  * If all children return FAILURE, RoundRobin will return FAILURE
  * and halt all children, ending the sequence.
  *
- * Usage in XML: <RoundRobin>
+ * Usage in XML:
+ * @code
+ * <RoundRobin>
+ *     <!--Add tree components here-->
+ * </RoundRobin>
+ * @endcode
  */
 class RoundRobinNode : public BT::ControlNode
 {

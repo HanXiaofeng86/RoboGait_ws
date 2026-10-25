@@ -18,8 +18,9 @@
 #include <vector>
 #include <memory>
 #include <utility>
+#include <string>
 
-#include "behaviortree_cpp_v3/loggers/abstract_logger.h"
+#include "behaviortree_cpp/loggers/abstract_logger.h"
 #include "rclcpp/rclcpp.hpp"
 #include "nav2_msgs/msg/behavior_tree_log.hpp"
 #include "nav2_msgs/msg/behavior_tree_status_change.h"
@@ -44,7 +45,7 @@ public:
   {
     auto node = ros_node.lock();
     clock_ = node->get_clock();
-    logger_ = node->get_logger();
+    logger_ = node->get_logger().get_child("ros_topic_logger");
     log_pub_ = node->create_publisher<nav2_msgs::msg::BehaviorTreeLog>(
       "behavior_tree_log",
       rclcpp::QoS(10));
@@ -69,16 +70,19 @@ public:
     // before converting to a msg.
     event.timestamp = tf2_ros::toMsg(tf2::TimePoint(timestamp));
     event.node_name = node.name();
+    event.uid = node.UID();
     event.previous_status = toStr(prev_status, false);
     event.current_status = toStr(status, false);
     event_log_.push_back(std::move(event));
 
+    auto prev_pad = std::string(kStatusWidth - toStr(prev_status, false).size(), ' ');
+    auto curr_pad = std::string(kStatusWidth - toStr(status, false).size(), ' ');
     RCLCPP_DEBUG(
-      logger_, "[%.3f]: %25s %s -> %s",
+      logger_, "[%.3f]: %s%s -> %s%s  %s",
       std::chrono::duration<double>(timestamp).count(),
-      node.name().c_str(),
-      toStr(prev_status, true).c_str(),
-      toStr(status, true).c_str() );
+      toStr(prev_status, true).c_str(), prev_pad.c_str(),
+      toStr(status, true).c_str(), curr_pad.c_str(),
+      node.name().c_str() );
   }
 
   /**
@@ -96,6 +100,8 @@ public:
   }
 
 protected:
+  // Longest BT status string is 7 chars (RUNNING, SUCCESS, FAILURE); pad shorter ones (IDLE)
+  static constexpr size_t kStatusWidth = 7;
   rclcpp::Clock::SharedPtr clock_;
   rclcpp::Logger logger_{rclcpp::get_logger("bt_navigator")};
   rclcpp::Publisher<nav2_msgs::msg::BehaviorTreeLog>::SharedPtr log_pub_;

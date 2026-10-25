@@ -20,8 +20,11 @@
 
 #include "rclcpp/rclcpp.hpp"
 
-#include "behaviortree_cpp_v3/condition_node.h"
+#include "behaviortree_cpp/json_export.h"
+#include "behaviortree_cpp/condition_node.h"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "nav2_behavior_tree/bt_utils.hpp"
+#include "nav2_behavior_tree/json_utils.hpp"
 
 
 namespace nav2_behavior_tree
@@ -29,6 +32,11 @@ namespace nav2_behavior_tree
 /**
  * @brief A BT::ConditionNode that returns SUCCESS when goal is
  * updated on the blackboard and FAILURE otherwise
+ *
+ * Usage in XML:
+ * @code
+ * <GlobalUpdatedGoal/>
+ * @endcode
  */
 class GloballyUpdatedGoalCondition : public BT::ConditionNode
 {
@@ -57,7 +65,16 @@ public:
    */
   static BT::PortsList providedPorts()
   {
-    return {};
+    // Register JSON definitions for the types used in the ports
+    BT::RegisterJsonDefinition<geometry_msgs::msg::PoseStamped>();
+    BT::RegisterJsonDefinition<std::vector<geometry_msgs::msg::PoseStamped>>();
+
+    return {
+      BT::InputPort<std::vector<geometry_msgs::msg::PoseStamped>>(
+        "goals", "Vector of navigation goals"),
+      BT::InputPort<geometry_msgs::msg::PoseStamped>(
+        "goal", "Navigation goal"),
+    };
   }
 
 private:
