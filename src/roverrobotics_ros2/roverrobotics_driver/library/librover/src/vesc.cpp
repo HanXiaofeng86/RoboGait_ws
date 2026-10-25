@@ -12,8 +12,22 @@ namespace vesc {
 
     vescChannelStatus BridgedVescArray::parseReceivedMessage(std::vector<uint8_t> robotmsg) 
     {
+        const vescChannelStatus invalid = {.vescId = 0,
+                                           .current = 0,
+                                           .rpm = 0,
+                                           .duty = 0,
+                                           .voltage = 0,
+                                           .current_in = 0,
+                                           .dataValid = false};
+        /* CAN path packs 4 id bytes + dlc + 8 data bytes. Anything shorter is not a status frame. */
+        if (robotmsg.size() < 13) {
+            return invalid;
+        }
 
-        auto full_msg = static_cast<uint32_t>((robotmsg[0] << 24) + (robotmsg[1] << 16) + (robotmsg[2] << 8) + robotmsg[3]);
+        auto full_msg = (static_cast<uint32_t>(robotmsg[0]) << 24) |
+                        (static_cast<uint32_t>(robotmsg[1]) << 16) |
+                        (static_cast<uint32_t>(robotmsg[2]) << 8) |
+                        static_cast<uint32_t>(robotmsg[3]);
 
         uint8_t vescId = full_msg & ID_MASK;
         uint8_t commandId = (full_msg & COMMAND_MASK) >> 8;
@@ -23,13 +37,19 @@ namespace vesc {
         {
 
             /* combine shifted byte values into a single rpm value */
-            int32_t rpm_scaled = (robotmsg[5] << 24) | (robotmsg[6] << 16) | (robotmsg[7] << 8) | (robotmsg[8]);
+            uint32_t rpm_bits = (static_cast<uint32_t>(robotmsg[5]) << 24) |
+                                (static_cast<uint32_t>(robotmsg[6]) << 16) |
+                                (static_cast<uint32_t>(robotmsg[7]) << 8) |
+                                static_cast<uint32_t>(robotmsg[8]);
+            int32_t rpm_scaled = static_cast<int32_t>(rpm_bits);
 
             /* combine shifted byte values into a single current value */
-            int16_t current_scaled = (robotmsg[9] << 8) | (robotmsg[10]);
+            int16_t current_scaled = static_cast<int16_t>(
+                (static_cast<uint16_t>(robotmsg[9]) << 8) | robotmsg[10]);
 
             /* combine shifted byte values into a single duty value */
-            int16_t duty_scaled = (robotmsg[11] << 8) | (robotmsg[12]);
+            int16_t duty_scaled = static_cast<int16_t>(
+                (static_cast<uint16_t>(robotmsg[11]) << 8) | robotmsg[12]);
             
             /* scale values per fixed-point vesc protocol */
             float rpm = ((float)rpm_scaled) * RPM_SCALING_FACTOR;
@@ -64,15 +84,12 @@ namespace vesc {
             float voltage_scaled = (robotmsg[9] << 8) | (robotmsg[10]);
             currentVoltage_ = ((float)voltage_scaled) * VOLTAGE_SCALING_FACTOR;
 
-            return (vescChannelStatus){
-                .vescId = 0, 
-                .current = 0, 
-                .rpm = 0, 
-                .duty = 0, 
-                .voltage = 0,
-                .current_in = 0, 
-                .dataValid = false};
+            return invalid;
         }
+
+        /* STATUS_2 / STATUS_3 / STATUS_6 and other ids are not used. Falling off
+         * the end of this function is undefined and segfaults on GCC 13. */
+        return invalid;
     }
 
     std::vector<uint8_t> BridgedVescArray::buildCommandMessage(vesc::vescChannelCommand command) 
@@ -94,7 +111,7 @@ namespace vesc {
                 break;
             default:
                 std::cerr << "unknown command type" << std::endl;
-                exit(-1);
+                return write_buffer;
         };
 
         auto casted_command = static_cast<int32_t>(command.commandValue);

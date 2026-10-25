@@ -20,7 +20,7 @@
 #include <memory>
 
 #include "rclcpp/rclcpp.hpp"
-#include "behaviortree_cpp_v3/condition_node.h"
+#include "behaviortree_cpp/condition_node.h"
 #include "tf2_ros/buffer.h"
 
 namespace nav2_behavior_tree
@@ -29,6 +29,11 @@ namespace nav2_behavior_tree
 /**
  * @brief A BT::ConditionNode that returns SUCCESS if there is a valid transform
  * between two specified frames and FAILURE otherwise
+ *
+ * Usage in XML:
+ * @code
+ * <TransformAvailable parent="odom" child="base_link"/>
+ * @endcode
  */
 class TransformAvailableCondition : public BT::ConditionNode
 {
@@ -56,14 +61,19 @@ public:
   BT::NodeStatus tick() override;
 
   /**
+   * @brief Function to read parameters and initialize class variables
+   */
+  void initialize();
+
+  /**
    * @brief Creates list of BT ports
    * @return BT::PortsList Containing node-specific ports
    */
   static BT::PortsList providedPorts()
   {
     return {
-      BT::InputPort<std::string>("child", std::string(), "Child frame for transform"),
-      BT::InputPort<std::string>("parent", std::string(), "parent frame for transform")
+      BT::InputPort<std::string>("child", "", "Child frame for transform"),
+      BT::InputPort<std::string>("parent", "", "parent frame for transform")
     };
   }
 

@@ -5,11 +5,11 @@
 
 一次只开一套程序。开下一套之前，先在上一套的终端按 **Ctrl+C**，等到命令提示符回来。
 
-每个新终端都先执行（让本工作空间盖过 `.bashrc` 里的旧空间）：
+每个新终端都先执行（让本工作空间盖过 `.bashrc` 里的旧空间，也盖过 `/opt/ros/jazzy` 里的 Nav2）。导航跑的是仓库里的 `src/navigation2`，改这份源码后要重新 `colcon build` 再 source。
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ```
 
@@ -47,7 +47,7 @@ export MAP=$HOME/RoboGait_ws/src/robot_slam_mapping/maps/today
 ```bash
 ip link show can0
 ls -l /dev/input/js0 /dev/rplidar
-ls -l /dev/bno055
+ls -l /dev/serial/by-id/usb-0403_6014-if00-port0
 systemctl is-active roverrobotics.service
 ```
 
@@ -59,7 +59,7 @@ systemctl is-active roverrobotics.service
 
 `systemctl` 打出 `failed` 可以继续——旧开机服务没在跑就行。**不要改 systemd**，也不要去开厂商的 `mini_teleop`。
 
-`/dev/bno055` 今天可以没有，是可选的。后面日志里若有 bno055 反复 respawn，**忽略**即可。  
+IMU 用 `usb-0403_6014-if00-port0`（没有序列号的那只 FTDI）。`FT8ISNFV` 是云台，不是 IMU。这个口不在时也可以建图；后面日志里若有 bno055 反复 respawn，**忽略**即可。  
 注意：偏航角速度目前只来自 IMU，转弯要**慢**；没有倒车（`vx_min` 为 0），车会原地转。**不要**把前进上限 `vx_max` 调到超过 `1.00`。
 
 ### 雷达 USB 转接盒（重要）

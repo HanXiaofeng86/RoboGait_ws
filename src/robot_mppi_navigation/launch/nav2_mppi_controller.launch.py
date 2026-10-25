@@ -23,13 +23,22 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.actions import EmitEvent
 from launch.actions import IncludeLaunchDescription
+from launch.actions import LogInfo
+from launch.actions import RegisterEventHandler
 from launch.actions import SetEnvironmentVariable
 from launch.conditions import IfCondition
+from launch.events import matches_action
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PythonExpression
+from launch_ros.actions import LifecycleNode
 from launch_ros.actions import Node
+from launch_ros.event_handlers import OnStateTransition
+from launch_ros.events.lifecycle import ChangeState
+from lifecycle_msgs.msg import Transition
+from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml
 
 
@@ -86,14 +95,18 @@ def generate_launch_description():
         'velocity_smoother',
     ]
 
-    configured_params = RewrittenYaml(
-        source_file=params_file,
-        root_key='',
-        param_rewrites={
-            'use_sim_time': use_sim_time,
-            'autostart': autostart,
-        },
-        convert_types=True,
+    # Jazzy launch_ros only loads extensionless RewrittenYaml temps via ParameterFile.
+    configured_params = ParameterFile(
+        RewrittenYaml(
+            source_file=params_file,
+            root_key='',
+            param_rewrites={
+                'use_sim_time': use_sim_time,
+                'autostart': autostart,
+            },
+            convert_types=True,
+        ),
+        allow_substs=True,
     )
 
     ld = LaunchDescription()
@@ -161,19 +174,44 @@ def generate_launch_description():
     )
 
     # ---------- Localization path A2: external slam_toolbox YAML ----------
-    ld.add_action(
-        Node(
-            package='slam_toolbox',
-            executable='async_slam_toolbox_node',
-            name='slam_toolbox',
-            output='screen',
-            condition=IfCondition(use_external_slam),
-            parameters=[
-                slam_params_file,
-                {'use_sim_time': use_sim_time},
-            ],
-        )
+    external_slam = LifecycleNode(
+        package='slam_toolbox',
+        executable='async_slam_toolbox_node',
+        name='slam_toolbox',
+        namespace='',
+        output='screen',
+        condition=IfCondition(use_external_slam),
+        parameters=[
+            slam_params_file,
+            {
+                'use_sim_time': use_sim_time,
+                'use_lifecycle_manager': False,
+            },
+        ],
     )
+    ld.add_action(external_slam)
+    ld.add_action(EmitEvent(
+        event=ChangeState(
+            lifecycle_node_matcher=matches_action(external_slam),
+            transition_id=Transition.TRANSITION_CONFIGURE,
+        ),
+        condition=IfCondition(use_external_slam),
+    ))
+    ld.add_action(RegisterEventHandler(
+        OnStateTransition(
+            target_lifecycle_node=external_slam,
+            start_state='configuring',
+            goal_state='inactive',
+            entities=[
+                LogInfo(msg='slam_toolbox configured, activating.'),
+                EmitEvent(event=ChangeState(
+                    lifecycle_node_matcher=matches_action(external_slam),
+                    transition_id=Transition.TRANSITION_ACTIVATE,
+                )),
+            ],
+        ),
+        condition=IfCondition(use_external_slam),
+    ))
     ld.add_action(
         Node(
             package='nav2_map_server',

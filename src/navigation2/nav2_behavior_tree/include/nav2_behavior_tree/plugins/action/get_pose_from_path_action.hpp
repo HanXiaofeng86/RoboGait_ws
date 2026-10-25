@@ -19,15 +19,23 @@
 #include <memory>
 #include <string>
 
+#include "behaviortree_cpp/json_export.h"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_util/geometry_utils.hpp"
 #include "nav2_util/robot_utils.hpp"
-#include "behaviortree_cpp_v3/action_node.h"
+#include "behaviortree_cpp/action_node.h"
+#include "nav2_behavior_tree/json_utils.hpp"
 #include "nav_msgs/msg/path.h"
 
 namespace nav2_behavior_tree
 {
 
+/**
+ * Usage in XML:
+ * @code
+ * <GetPoseFromPath path="{path}" index="-1" pose="{goal}"/>
+ * @endcode
+ */
 class GetPoseFromPath : public BT::ActionNodeBase
 {
 public:
@@ -38,6 +46,10 @@ public:
 
   static BT::PortsList providedPorts()
   {
+    // Register JSON definitions for the types used in the ports
+    BT::RegisterJsonDefinition<geometry_msgs::msg::PoseStamped>();
+    BT::RegisterJsonDefinition<nav_msgs::msg::Path>();
+
     return {
       BT::InputPort<nav_msgs::msg::Path>("path", "Path to extract pose from"),
       BT::OutputPort<geometry_msgs::msg::PoseStamped>("pose", "Stamped Extracted Pose"),

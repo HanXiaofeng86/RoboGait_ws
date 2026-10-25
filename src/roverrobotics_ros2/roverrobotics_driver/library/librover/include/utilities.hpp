@@ -11,6 +11,14 @@
 #include <optional>
 #include <mutex>
 
+inline std::string robot_config_path() {
+  const char *home = std::getenv("HOME");
+  if (home == nullptr || home[0] == '\0') {
+    return std::string("/tmp/robot.config");
+  }
+  return std::string(home) + "/robot.config";
+}
+
 namespace Utilities {
 /* classes */
 class PersistentParams;

@@ -16,8 +16,8 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "../../test_behavior_tree_fixture.hpp"
-#include "../../test_dummy_tree_node.hpp"
+#include "utils/test_behavior_tree_fixture.hpp"
+#include "utils/test_dummy_tree_node.hpp"
 #include "nav2_behavior_tree/plugins/control/round_robin_node.hpp"
 
 class RoundRobinNodeTestFixture : public nav2_behavior_tree::BehaviorTreeTestFixture
@@ -58,7 +58,7 @@ std::shared_ptr<nav2_behavior_tree::DummyNode> RoundRobinNodeTestFixture::third_
 TEST_F(RoundRobinNodeTestFixture, test_failure_on_idle_child)
 {
   first_child_->changeStatus(BT::NodeStatus::IDLE);
-  EXPECT_THROW(bt_node_->executeTick(), BT::LogicError);
+  EXPECT_THROW(bt_node_->executeTick(), BT::RuntimeError);
 }
 
 TEST_F(RoundRobinNodeTestFixture, test_failure)
@@ -109,6 +109,33 @@ TEST_F(RoundRobinNodeTestFixture, test_behavior)
   second_child_->changeStatus(BT::NodeStatus::SUCCESS);
   third_child_->changeStatus(BT::NodeStatus::FAILURE);
   EXPECT_EQ(bt_node_->executeTick(), BT::NodeStatus::SUCCESS);
+  EXPECT_EQ(first_child_->status(), BT::NodeStatus::IDLE);
+  EXPECT_EQ(second_child_->status(), BT::NodeStatus::IDLE);
+  EXPECT_EQ(third_child_->status(), BT::NodeStatus::IDLE);
+}
+
+TEST_F(RoundRobinNodeTestFixture, test_skikpped)
+{
+  first_child_->changeStatus(BT::NodeStatus::SKIPPED);
+  second_child_->changeStatus(BT::NodeStatus::SUCCESS);
+  third_child_->changeStatus(BT::NodeStatus::FAILURE);
+  EXPECT_EQ(bt_node_->executeTick(), BT::NodeStatus::SUCCESS);
+  EXPECT_EQ(first_child_->status(), BT::NodeStatus::IDLE);
+  EXPECT_EQ(second_child_->status(), BT::NodeStatus::IDLE);
+  EXPECT_EQ(third_child_->status(), BT::NodeStatus::IDLE);
+
+  first_child_->changeStatus(BT::NodeStatus::SKIPPED);
+  second_child_->changeStatus(BT::NodeStatus::SKIPPED);
+  third_child_->changeStatus(BT::NodeStatus::FAILURE);
+  EXPECT_EQ(bt_node_->executeTick(), BT::NodeStatus::FAILURE);
+  EXPECT_EQ(first_child_->status(), BT::NodeStatus::IDLE);
+  EXPECT_EQ(second_child_->status(), BT::NodeStatus::IDLE);
+  EXPECT_EQ(third_child_->status(), BT::NodeStatus::IDLE);
+
+  first_child_->changeStatus(BT::NodeStatus::SKIPPED);
+  second_child_->changeStatus(BT::NodeStatus::SKIPPED);
+  third_child_->changeStatus(BT::NodeStatus::SKIPPED);
+  EXPECT_EQ(bt_node_->executeTick(), BT::NodeStatus::SKIPPED);
   EXPECT_EQ(first_child_->status(), BT::NodeStatus::IDLE);
   EXPECT_EQ(second_child_->status(), BT::NodeStatus::IDLE);
   EXPECT_EQ(third_child_->status(), BT::NodeStatus::IDLE);

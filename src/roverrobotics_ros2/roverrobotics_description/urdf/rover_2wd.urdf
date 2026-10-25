@@ -223,7 +223,7 @@
     </joint>
 
     <gazebo>
-        <plugin name="ignition::gazebo::systems::DiffDrive" filename="ignition-gazebo-diff-drive-system"> 
+        <plugin name="gz::sim::systems::DiffDrive" filename="gz-sim-diff-drive-system"> 
             <num_wheel_pairs>2</num_wheel_pairs>
             <!-- Wheel Information -->
             <left_joint>fl_wheel_to_chassis</left_joint>
@@ -249,7 +249,7 @@
 
         </plugin>
 
-        <plugin filename="ignition-gazebo-joint-state-publisher-system" name="ignition::gazebo::systems::JointStatePublisher">
+        <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
             <topic>/joint_states</topic>
         </plugin>
     </gazebo>

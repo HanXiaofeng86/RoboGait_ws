@@ -20,7 +20,7 @@
 #include <deque>
 
 #include "rclcpp/rclcpp.hpp"
-#include "behaviortree_cpp_v3/condition_node.h"
+#include "behaviortree_cpp/condition_node.h"
 #include "nav_msgs/msg/odometry.hpp"
 
 namespace nav2_behavior_tree
@@ -29,6 +29,11 @@ namespace nav2_behavior_tree
 /**
  * @brief A BT::ConditionNode that tracks robot odometry and returns SUCCESS
  * if robot is stuck somewhere and FAILURE otherwise
+ *
+ * Usage in XML:
+ * @code
+ * <IsStuck/>
+ * @endcode
  */
 class IsStuckCondition : public BT::ConditionNode
 {

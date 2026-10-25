@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "ament_index_cpp/get_package_share_directory.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "nav2_costmap_2d/costmap_2d.hpp"
 #include "nav2_costmap_2d/costmap_subscriber.hpp"
@@ -44,6 +45,21 @@ public:
   {
     dynamicParametersCallback(parameters);
   }
+
+  bool getAllowReverseExpansion()
+  {
+    return _search_info.allow_reverse_expansion;
+  }
+
+  std::string getMotionModelName()
+  {
+    return _metadata.motion_model;
+  }
+
+  bool hasSmootherInitialized()
+  {
+    return _smoother != nullptr;
+  }
 };
 
 // SMAC smoke tests for plugin-level issues rather than algorithms
@@ -54,10 +70,15 @@ TEST(SmacTest, test_smac_lattice)
 {
   rclcpp_lifecycle::LifecycleNode::SharedPtr nodeLattice =
     std::make_shared<rclcpp_lifecycle::LifecycleNode>("SmacLatticeTest");
+  nodeLattice->declare_parameter("test.debug_visualizations", rclcpp::ParameterValue(true));
 
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros =
     std::make_shared<nav2_costmap_2d::Costmap2DROS>("global_costmap");
   costmap_ros->on_configure(rclcpp_lifecycle::State());
+
+  auto dummy_cancel_checker = []() {
+      return false;
+    };
 
   geometry_msgs::msg::PoseStamped start, goal;
   start.pose.position.x = 0.0;
@@ -75,9 +96,16 @@ TEST(SmacTest, test_smac_lattice)
   planner->activate();
 
   try {
-    planner->createPlan(start, goal);
+    planner->createPlan(start, goal, dummy_cancel_checker);
   } catch (...) {
   }
+
+  // corner case where the start and goal are on the same cell
+  goal.pose.position.x = 0.01;
+  goal.pose.position.y = 0.01;
+
+  nav_msgs::msg::Path plan = planner->createPlan(start, goal, dummy_cancel_checker);
+  EXPECT_EQ(plan.poses.size(), 1);  // single point path
 
   planner->deactivate();
   planner->cleanup();
@@ -127,6 +155,7 @@ TEST(SmacTest, test_smac_lattice_reconfigure)
       rclcpp::Parameter("test.tolerance", 42.0),
       rclcpp::Parameter("test.rotation_penalty", 42.0),
       rclcpp::Parameter("test.max_on_approach_iterations", 42),
+      rclcpp::Parameter("test.terminal_checking_interval", 42),
       rclcpp::Parameter("test.allow_reverse_expansion", true)});
 
   try {
@@ -143,4 +172,78 @@ TEST(SmacTest, test_smac_lattice_reconfigure)
   std::vector<rclcpp::Parameter> parameters;
   parameters.push_back(rclcpp::Parameter("test.lattice_filepath", std::string("HI")));
   EXPECT_THROW(planner->callDynamicParams(parameters), std::runtime_error);
+}
+
+TEST(SmacTest, test_smac_lattice_omni_configure)
+{
+  rclcpp_lifecycle::LifecycleNode::SharedPtr nodeLattice =
+    std::make_shared<rclcpp_lifecycle::LifecycleNode>("SmacLatticeOmniTest");
+
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros =
+    std::make_shared<nav2_costmap_2d::Costmap2DROS>("global_costmap");
+  costmap_ros->on_configure(rclcpp_lifecycle::State());
+
+  std::string omni_filepath =
+    ament_index_cpp::get_package_share_directory("nav2_smac_planner") +
+    "/sample_primitives/5cm_resolution/0.5m_turning_radius/omni/output.json";
+
+  nodeLattice->declare_parameter("test_omni.lattice_filepath", omni_filepath);
+  nodeLattice->declare_parameter("test_omni.allow_reverse_expansion", true);
+
+  auto planner = std::make_unique<LatticeWrap>();
+  planner->configure(nodeLattice, "test_omni", nullptr, costmap_ros);
+
+  // Verify OMNI was loaded and reverse expansion was auto-disabled
+  EXPECT_EQ(planner->getMotionModelName(), "omni");
+  EXPECT_FALSE(planner->getAllowReverseExpansion());
+  EXPECT_TRUE(planner->hasSmootherInitialized());
+
+  planner->activate();
+  planner->deactivate();
+  planner->cleanup();
+  planner.reset();
+  costmap_ros->on_cleanup(rclcpp_lifecycle::State());
+  costmap_ros.reset();
+  nodeLattice.reset();
+}
+
+TEST(SmacTest, test_smac_lattice_omni_reconfigure)
+{
+  rclcpp_lifecycle::LifecycleNode::SharedPtr nodeLattice =
+    std::make_shared<rclcpp_lifecycle::LifecycleNode>("SmacLatticeOmniReconfigTest");
+
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros =
+    std::make_shared<nav2_costmap_2d::Costmap2DROS>("global_costmap");
+  costmap_ros->on_configure(rclcpp_lifecycle::State());
+
+  auto planner = std::make_unique<LatticeWrap>();
+  try {
+    planner->configure(nodeLattice, "test_omni_reconf", nullptr, costmap_ros);
+  } catch (...) {
+  }
+  planner->activate();
+
+  std::string omni_filepath =
+    ament_index_cpp::get_package_share_directory("nav2_smac_planner") +
+    "/sample_primitives/5cm_resolution/0.5m_turning_radius/omni/output.json";
+
+  // Reconfigure to OMNI with reverse expansion enabled
+  std::vector<rclcpp::Parameter> parameters;
+  parameters.push_back(
+    rclcpp::Parameter("test_omni_reconf.lattice_filepath", omni_filepath));
+  parameters.push_back(
+    rclcpp::Parameter("test_omni_reconf.allow_reverse_expansion", true));
+  EXPECT_NO_THROW(planner->callDynamicParams(parameters));
+
+  // Verify OMNI reconfigure disabled reverse expansion and re-initialized smoother
+  EXPECT_EQ(planner->getMotionModelName(), "omni");
+  EXPECT_FALSE(planner->getAllowReverseExpansion());
+  EXPECT_TRUE(planner->hasSmootherInitialized());
+
+  planner->deactivate();
+  planner->cleanup();
+  planner.reset();
+  costmap_ros->on_cleanup(rclcpp_lifecycle::State());
+  costmap_ros.reset();
+  nodeLattice.reset();
 }

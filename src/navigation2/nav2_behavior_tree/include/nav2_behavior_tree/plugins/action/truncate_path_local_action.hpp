@@ -22,7 +22,9 @@
 
 #include "nav_msgs/msg/path.hpp"
 
-#include "behaviortree_cpp_v3/action_node.h"
+#include "behaviortree_cpp/action_node.h"
+#include "behaviortree_cpp/json_export.h"
+#include "nav2_behavior_tree/json_utils.hpp"
 #include "tf2_ros/buffer.h"
 
 namespace nav2_behavior_tree
@@ -30,6 +32,12 @@ namespace nav2_behavior_tree
 
 /**
  * @brief A BT::ActionNodeBase to shorten path to some distance around robot
+ *
+ * Usage in XML:
+ * @code
+ * <TruncatePathLocal input_path="{path}" output_path="{path_local}"
+ *                    distance_forward="3.5" distance_backward="2.0" robot_frame="base_link"/>
+ * @endcode
  */
 class TruncatePathLocal : public BT::ActionNodeBase
 {
@@ -49,6 +57,10 @@ public:
    */
   static BT::PortsList providedPorts()
   {
+    // Register JSON definitions for the types used in the ports
+    BT::RegisterJsonDefinition<nav_msgs::msg::Path>();
+    BT::RegisterJsonDefinition<geometry_msgs::msg::PoseStamped>();
+
     return {
       BT::InputPort<nav_msgs::msg::Path>("input_path", "Original Path"),
       BT::OutputPort<nav_msgs::msg::Path>(

@@ -147,6 +147,12 @@ public:
     graph_.resize(1);
   }
 
+  // Expose graph size to verify failed replacement is non-destructive.
+  size_t graphSize() const
+  {
+    return graph_.size();
+  }
+
   void useErrorCodePlanner()
   {
     route_planner_ = std::make_shared<RoutePlannerErrorTester>();
@@ -185,12 +191,15 @@ TEST(RouteServerTest, test_set_srv)
   req2->graph_filepath = real_filepath;
   auto resp2 = srv_client.invoke(req2, std::chrono::nanoseconds(1000000000));
   EXPECT_TRUE(resp2->success);
+  const auto graph_size = server->graphSize();
+  EXPECT_GT(graph_size, 0u);
 
   auto req3 = std::make_shared<nav2_msgs::srv::SetRouteGraph::Request>();
   req3->graph_filepath = ament_index_cpp::get_package_share_directory("nav2_route") +
     "/test/test_graphs/invalid.json";
   auto resp3 = srv_client.invoke(req3, std::chrono::nanoseconds(1000000000));
   EXPECT_FALSE(resp3->success);
+  EXPECT_EQ(server->graphSize(), graph_size);
 
   server->shutdown();
   node_thread.reset();
@@ -346,6 +355,56 @@ TEST(RouteServerTest, test_complete_action_api)
   EXPECT_EQ(code, rclcpp_action::ResultCode::CANCELED);
 
   // Make sure it still shuts down completely after real work
+  server->shutdown();
+  node_thread.reset();
+  server.reset();
+}
+
+TEST(RouteServerTest, test_error_codes)
+{
+  std::string pkg_share_dir = ament_index_cpp::get_package_share_directory("nav2_route");
+  std::string real_file = pkg_share_dir + "/test/test_graphs/error_codes.geojson";
+
+  rclcpp::NodeOptions options;
+  auto server = std::make_shared<RouteServerWrapper>(options);
+  server->declare_parameter("graph_filepath", rclcpp::ParameterValue(real_file));
+  auto node_thread = std::make_unique<nav2_util::NodeThread>(server);
+  server->startup();
+
+  // This uses the error code planner rather than the built-in planner
+  // to test throwing error conditions in the action and how that's handled by the server.
+  server->useErrorCodePlanner();
+
+  // Compute a simple route action request
+  using nav2_msgs::action::ComputeAndTrackRoute;
+  auto node2 = std::make_shared<rclcpp::Node>("my_node2");
+  auto compute_client =
+    rclcpp_action::create_client<ComputeAndTrackRoute>(node2, "compute_and_track_route");
+
+  // These make use of poses to bypass data structure lookups and `map` to bypass TF
+  // Our test planner will still use the start ID
+  nav2_msgs::action::ComputeAndTrackRoute::Goal goal;
+  goal.use_start = true;
+  goal.use_poses = true;
+  goal.start.header.frame_id = "map";
+  goal.goal.header.frame_id = "map";
+  goal.goal.pose.position.x = 1.0;  // On graph, just make sure always different
+  for (unsigned int i = 399; i != 408; i++) {
+    goal.start.pose.position.x = static_cast<float>(i);
+    auto future_goal = compute_client->async_send_goal(goal);
+
+    rclcpp::spin_until_future_complete(node2, future_goal);
+    auto goal_handle = future_goal.get();
+    auto result_future = compute_client->async_get_result(goal_handle);
+    rclcpp::spin_until_future_complete(node2, result_future);
+    auto result = result_future.get().result;
+    if (i == 399u) {
+      EXPECT_EQ(result->error_code, i + 1u);  // Also UNKNOWN, just distinguished differently
+    } else {
+      EXPECT_EQ(result->error_code, i);
+    }
+  }
+
   server->shutdown();
   node_thread.reset();
   server.reset();

@@ -18,7 +18,9 @@ bno055:
     active: true
     ros_topic_prefix: ""
     connection_type: "uart"
-    uart_port: "/dev/bno055"
+    # IMU on this NUC: FTDI 0403:6014 with no serial string (ttyUSB2).
+    # Do not use FT8ISNFV — that by-id entry is the gimbal U2D2.
+    uart_port: "/dev/serial/by-id/usb-0403_6014-if00-port0"
     uart_baudrate: 115200
     uart_timeout: 0.2
     data_query_frequency: 20

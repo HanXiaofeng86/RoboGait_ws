@@ -21,7 +21,7 @@ namespace nav2_route
 {
 
 void CostmapScorer::configure(
-  const rclcpp_lifecycle::LifecycleNode::SharedPtr node,
+  const nav2_util::LifecycleNode::SharedPtr node,
   const std::shared_ptr<tf2_ros::Buffer>/* tf_buffer */,
   std::shared_ptr<nav2_costmap_2d::CostmapSubscriber> costmap_subscriber,
   const std::string & name)
@@ -34,19 +34,19 @@ void CostmapScorer::configure(
   // Find whether to use average or maximum cost values
   nav2_util::declare_parameter_if_not_declared(
     node, getName() + ".use_maximum", rclcpp::ParameterValue(true));
-  use_max_ = static_cast<float>(node->get_parameter(getName() + ".use_maximum").as_bool());
+  use_max_ = node->get_parameter(getName() + ".use_maximum").as_bool();
 
   // Edge is invalid if its in collision
   nav2_util::declare_parameter_if_not_declared(
     node, getName() + ".invalid_on_collision", rclcpp::ParameterValue(true));
   invalid_on_collision_ =
-    static_cast<float>(node->get_parameter(getName() + ".invalid_on_collision").as_bool());
+    node->get_parameter(getName() + ".invalid_on_collision").as_bool();
 
   // Edge is invalid if edge is off the costmap
   nav2_util::declare_parameter_if_not_declared(
     node, getName() + ".invalid_off_map", rclcpp::ParameterValue(true));
   invalid_off_map_ =
-    static_cast<float>(node->get_parameter(getName() + ".invalid_off_map").as_bool());
+    node->get_parameter(getName() + ".invalid_off_map").as_bool();
 
   // Max cost to be considered valid
   nav2_util::declare_parameter_if_not_declared(
@@ -69,8 +69,7 @@ void CostmapScorer::configure(
   if (costmap_topic != server_costmap_topic) {
     costmap_subscriber_ = std::make_shared<nav2_costmap_2d::CostmapSubscriber>(
       node, costmap_topic);
-    RCLCPP_INFO(
-      node->get_logger(),
+    RCLCPP_INFO(node->get_logger(),
       "Using costmap topic: %s instead of server costmap topic: %s for CostmapScorer.",
       costmap_topic.c_str(), server_costmap_topic.c_str());
   } else {

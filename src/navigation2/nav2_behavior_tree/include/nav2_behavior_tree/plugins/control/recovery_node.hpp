@@ -16,7 +16,7 @@
 #define NAV2_BEHAVIOR_TREE__PLUGINS__CONTROL__RECOVERY_NODE_HPP_
 
 #include <string>
-#include "behaviortree_cpp_v3/control_node.h"
+#include "behaviortree_cpp/control_node.h"
 
 namespace nav2_behavior_tree
 {
@@ -31,6 +31,12 @@ namespace nav2_behavior_tree
  *
  * - If the second child returns FAILURE, this control node will stop the loop and returns FAILURE.
  *
+ * Usage in XML:
+ * @code
+ * <RecoveryNode number_of_retries="1">
+ *     <!--Add tree components here-->
+ * </RecoveryNode>
+ * @endcode
  */
 class RecoveryNode : public BT::ControlNode
 {

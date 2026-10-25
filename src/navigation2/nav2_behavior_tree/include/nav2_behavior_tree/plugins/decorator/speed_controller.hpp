@@ -24,7 +24,10 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav2_util/odometry_utils.hpp"
 
-#include "behaviortree_cpp_v3/decorator_node.h"
+#include "behaviortree_cpp/decorator_node.h"
+#include "behaviortree_cpp/json_export.h"
+#include "nav2_behavior_tree/bt_utils.hpp"
+#include "nav2_behavior_tree/json_utils.hpp"
 
 namespace nav2_behavior_tree
 {
@@ -33,6 +36,13 @@ namespace nav2_behavior_tree
  * @brief A BT::DecoratorNode that ticks its child every at a rate proportional to
  * the speed of the robot. If the robot travels faster, this node will tick its child at a
  * higher frequency and reduce the tick frequency if the robot slows down
+ *
+ * Usage in XML:
+ * @code
+ * <SpeedController min_rate="0.1" max_rate="1.0" min_speed="0.0" max_speed="0.5">
+ *     <!--Add tree components here-->
+ * </SpeedController>
+ * @endcode
  */
 class SpeedController : public BT::DecoratorNode
 {
@@ -52,11 +62,19 @@ public:
    */
   static BT::PortsList providedPorts()
   {
+    // Register JSON definitions for the types used in the ports
+    BT::RegisterJsonDefinition<geometry_msgs::msg::PoseStamped>();
+    BT::RegisterJsonDefinition<std::vector<geometry_msgs::msg::PoseStamped>>();
+
     return {
       BT::InputPort<double>("min_rate", 0.1, "Minimum rate"),
       BT::InputPort<double>("max_rate", 1.0, "Maximum rate"),
       BT::InputPort<double>("min_speed", 0.0, "Minimum speed"),
       BT::InputPort<double>("max_speed", 0.5, "Maximum speed"),
+      BT::InputPort<std::vector<geometry_msgs::msg::PoseStamped>>(
+        "goals", "Vector of navigation goals"),
+      BT::InputPort<geometry_msgs::msg::PoseStamped>(
+        "goal", "Navigation goal"),
     };
   }
 

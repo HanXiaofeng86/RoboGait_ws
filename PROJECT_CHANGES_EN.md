@@ -42,7 +42,7 @@ Every new terminal:
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash && source install/setup.bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ```
 
 Boolean launch args must be `True` / `False`.
@@ -873,7 +873,7 @@ If the terminal is already looping `Waiting for async process to finish` / `miss
 ```bash
 cd ~/RoboGait_ws
 rm -rf build/robot_mppi_navigation install/robot_mppi_navigation
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select robot_mppi_navigation --symlink-install
 source install/setup.bash
 ```
@@ -891,11 +891,11 @@ Launch from the **NUC desktop terminal** (the one with a screen), not SSH/`curso
 1. Costmap `obstacle_min_range: 0` paints the **robot body** as obstacles.  
 2. `vx_max: 1.2` looks too far ahead indoors; the control loop also missed 20 Hz.
 
-**Fix (lidar 0.40 m body-filter is still the main fix):** Daily nav `nav2_pure_mppi_params.yaml` **and** follow’s `robot_simple_commander/config/nav2_mppi_params.yaml` (follow reads **that** copy, not the daily-nav file) ignore lidar hits inside **0.40 m** (front-mounted lidar otherwise paints the Mini’s tail as an obstacle; **do not set obstacle/raytrace min_range back to 0**). `vx_max` is now a **1.00 m/s ceiling** (`wz_max` 1.20), not a constant cruise: 0.40 cannot keep up with a person; 1.2 made every rollout hit inflated cells. Keep smoother `max_velocity` matched to `vx_max`/`wz_max`. If `Optimizer fail` returns, first lower `vx_max` toward **0.70–0.80**; do not raise to 1.2. Humble MPPI **must stay 20 Hz with model_dt 0.05** — 10 Hz throws `Controller period more then model dt` and the controller never starts. Restart the whole launch.
+**Fix (lidar 0.40 m body-filter is still the main fix):** Daily nav `nav2_pure_mppi_params.yaml` **and** follow’s `robot_simple_commander/config/nav2_mppi_params.yaml` (follow reads **that** copy, not the daily-nav file) ignore lidar hits inside **0.40 m** (front-mounted lidar otherwise paints the Mini’s tail as an obstacle; **do not set obstacle/raytrace min_range back to 0**). `vx_max` is now a **1.00 m/s ceiling** (`wz_max` 1.20), not a constant cruise: 0.40 cannot keep up with a person; 1.2 made every rollout hit inflated cells. Keep smoother `max_velocity` matched to `vx_max`/`wz_max`. If `Optimizer fail` returns, first lower `vx_max` toward **0.70–0.80**; do not raise to 1.2. Jazzy MPPI **must stay 20 Hz with model_dt 0.05** — 10 Hz throws `Controller period more then model dt` and the controller never starts. Restart the whole launch.
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash && source install/setup.bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
   map:=$HOME/RoboGait_ws/src/robot_slam_mapping/maps/mini_lab2.yaml
 ```
@@ -908,7 +908,7 @@ To change speed later: `vx_max` / `wz_max` in the same yaml (keep smoother `max_
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select nav2_util robot_mppi_navigation --symlink-install
 source install/setup.bash
 ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
@@ -929,7 +929,7 @@ Wait for `Hardware topics are live. Starting Nav2.` and both `Managed nodes are 
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 source ~/RoboGait_ws/install/setup.bash
 echo $AMENT_PREFIX_PATH | tr ':' '\n' | head
 # first line should be /home/robogait/RoboGait_ws/install/...
@@ -962,7 +962,7 @@ ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 source ~/RoboGait_ws/install/setup.bash
 ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
   map:=$HOME/RoboGait_ws/src/robot_slam_mapping/maps/mini_lab2.yaml
@@ -990,7 +990,7 @@ Do not close RViz and do not Ctrl+C for IMU WARNs. Wait for both `Managed nodes 
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select bno055 --symlink-install
 source install/setup.bash
 ```
@@ -1001,7 +1001,7 @@ source install/setup.bash
 
 **Symptom:** The robot does move after a Goal, but at one slow speed the whole way; hallways/open floor never speed up.
 
-**Cause:** There is no separate cruise-control speed. Humble MPPI samples linear velocity in `0 … vx_max` every cycle: open space can use more of the cap; inflated obstacles slow it. Two earlier indoor-safety edits made that look like a constant crawl:
+**Cause:** There is no separate cruise-control speed. Jazzy MPPI samples linear velocity in `0 … vx_max` every cycle: open space can use more of the cap; inflated obstacles slow it. Two earlier indoor-safety edits made that look like a constant crawl:
 
 1. `vx_max: 0.80` (cap too low).
 2. Smoother `max_accel: 0.45` (~1.8 s to reach 0.80; a short lab never gets there).
@@ -1065,7 +1065,7 @@ When the prompt returns, launch again.
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select nav2_util nav2_planner nav2_navfn_planner nav2_behavior_tree --symlink-install
 source install/setup.bash
 ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
@@ -1123,7 +1123,7 @@ If the terminal prints `incompatible QoS` / `RELIABILITY_QOS_POLICY`, see **7.27
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash && source install/setup.bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch robogait_perception person_source.launch.py
 ```
 
@@ -1141,7 +1141,7 @@ Enable **CameraPose** in RViz: orange arrow = look direction, white **Camera** l
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash && source install/setup.bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch robogait_perception person_source.launch.py
 ```
 
@@ -1183,7 +1183,7 @@ If the log stays `Waiting for person`: overlay the old workspace and do not also
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select robogait_perception robogait_gimbal --symlink-install
 source install/setup.bash
 ros2 launch robogait_gimbal test_gimbal.launch.py
@@ -1204,7 +1204,7 @@ After lock, walking left/right should keep the person in front of the robot near
 ```bash
 # Stop the old person_source / test_gimbal, rebuild, relaunch
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select robogait_perception --symlink-install
 source install/setup.bash
 ros2 launch robogait_perception person_source.launch.py
@@ -1255,7 +1255,7 @@ Still bouncing: raise `tilt_dead_zone_deg` to 6 or lower `tilt_kp`. No skeleton:
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select robogait_perception robogait_gimbal --symlink-install
 source install/setup.bash
 ros2 launch robogait_gimbal test_gimbal.launch.py
@@ -1311,7 +1311,7 @@ RViz Color / Depth panels say **No Image** (Nuitrack does not publish color). Wa
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select robogait_perception robogait_gimbal --symlink-install
 source ~/rover_workspace_final/install/setup.bash
 source ~/RoboGait_ws/install/setup.bash
@@ -1348,7 +1348,7 @@ If anything is listed, wait until they stop. Today's mapping / navigation / path
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash && source install/setup.bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch robot_slam_mapping slam_mapping.launch.py
 ```
 

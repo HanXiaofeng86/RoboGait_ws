@@ -15,37 +15,40 @@ find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 
-set(ORBBEC_K4A_ROOT "$ENV{HOME}/orbbec_wrapper_v2")
+if(DEFINED ENV{ORBBEC_K4A_ROOT})
+  set(ORBBEC_K4A_ROOT "$ENV{ORBBEC_K4A_ROOT}")
+else()
+  set(ORBBEC_K4A_ROOT "$ENV{HOME}/orbbec_wrapper_v2")
+endif()
 find_path(K4A_INCLUDE_DIR k4a/k4a.h PATHS ${ORBBEC_K4A_ROOT}/include NO_DEFAULT_PATH)
 find_library(K4A_LIB k4a PATHS ${ORBBEC_K4A_ROOT}/lib NO_DEFAULT_PATH)
-find_library(K4ABT_LIB k4abt)
+find_library(K4ABT_LIB k4abt PATHS ${ORBBEC_K4A_ROOT}/lib)
 
-if(NOT K4A_INCLUDE_DIR OR NOT K4A_LIB)
-  message(FATAL_ERROR "Orbbec K4A wrapper not found under ${ORBBEC_K4A_ROOT}")
+if(K4A_INCLUDE_DIR AND K4A_LIB AND K4ABT_LIB)
+  add_executable(person_sdk src/person_sdk.cpp)
+  target_include_directories(person_sdk BEFORE PRIVATE ${K4A_INCLUDE_DIR})
+  target_link_libraries(person_sdk ${K4A_LIB} ${K4ABT_LIB})
+  ament_target_dependencies(
+    person_sdk
+    rclcpp
+    sensor_msgs
+    geometry_msgs
+    std_msgs
+    visualization_msgs
+    tf2
+    tf2_ros
+  )
+  set_target_properties(person_sdk PROPERTIES
+    BUILD_RPATH "${ORBBEC_K4A_ROOT}/lib"
+    INSTALL_RPATH "${ORBBEC_K4A_ROOT}/lib"
+  )
+  install(TARGETS person_sdk DESTINATION lib/${PROJECT_NAME})
+else()
+  message(WARNING
+    "Orbbec K4A wrapper not found under ${ORBBEC_K4A_ROOT}. "
+    "Skipping person_sdk. Python perception nodes still install. "
+    "Set ORBBEC_K4A_ROOT if the SDK lives somewhere else.")
 endif()
-if(NOT K4ABT_LIB)
-  message(FATAL_ERROR "libk4abt not found (install Azure Kinect Body Tracking)")
-endif()
-
-add_executable(person_sdk src/person_sdk.cpp)
-target_include_directories(person_sdk BEFORE PRIVATE ${K4A_INCLUDE_DIR})
-target_link_libraries(person_sdk ${K4A_LIB} ${K4ABT_LIB})
-ament_target_dependencies(
-  person_sdk
-  rclcpp
-  sensor_msgs
-  geometry_msgs
-  std_msgs
-  visualization_msgs
-  tf2
-  tf2_ros
-)
-set_target_properties(person_sdk PROPERTIES
-  BUILD_RPATH "${ORBBEC_K4A_ROOT}/lib"
-  INSTALL_RPATH "${ORBBEC_K4A_ROOT}/lib"
-)
-
-install(TARGETS person_sdk DESTINATION lib/${PROJECT_NAME})
 
 ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS

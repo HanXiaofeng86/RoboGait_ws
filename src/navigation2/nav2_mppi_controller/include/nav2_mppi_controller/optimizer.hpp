@@ -18,13 +18,19 @@
 #include <string>
 #include <memory>
 
+// xtensor creates warnings that needs to be ignored as we are building with -Werror
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
 #include <xtensor/xtensor.hpp>
 #include <xtensor/xview.hpp>
+#pragma GCC diagnostic pop
 
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
 #include "nav2_core/goal_checker.hpp"
+#include "nav2_core/controller_exceptions.hpp"
 
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
@@ -40,10 +46,6 @@
 #include "nav2_mppi_controller/tools/noise_generator.hpp"
 #include "nav2_mppi_controller/tools/parameters_handler.hpp"
 #include "nav2_mppi_controller/tools/utils.hpp"
-
-#ifdef __APPLE__
-  #include "nav2_mppi_controller/tools/apple_utils.hpp"
-#endif
 
 namespace mppi
 {
@@ -94,7 +96,7 @@ public:
   geometry_msgs::msg::TwistStamped evalControl(
     const geometry_msgs::msg::PoseStamped & robot_pose,
     const geometry_msgs::msg::Twist & robot_speed, const nav_msgs::msg::Path & plan,
-    nav2_core::GoalChecker * goal_checker);
+    const geometry_msgs::msg::Pose & goal, nav2_core::GoalChecker * goal_checker);
 
   /**
    * @brief Get the trajectories generated in a cycle for visualization
@@ -117,8 +119,9 @@ public:
 
   /**
    * @brief Reset the optimization problem to initial conditions
+   * @param Whether to reset the constraints to its base values
    */
-  void reset();
+  void reset(bool reset_dynamic_speed_limits = true);
 
 protected:
   /**
@@ -136,7 +139,8 @@ protected:
   void prepare(
     const geometry_msgs::msg::PoseStamped & robot_pose,
     const geometry_msgs::msg::Twist & robot_speed,
-    const nav_msgs::msg::Path & plan, nav2_core::GoalChecker * goal_checker);
+    const nav_msgs::msg::Path & plan,
+    const geometry_msgs::msg::Pose & goal, nav2_core::GoalChecker * goal_checker);
 
   /**
    * @brief Obtain the main controller's parameters
@@ -248,40 +252,25 @@ protected:
   NoiseGenerator noise_generator_;
 
   models::OptimizerSettings settings_;
+  size_t fallback_count_{0};
 
   models::State state_;
   models::ControlSequence control_sequence_;
   std::array<mppi::models::Control, 4> control_history_;
   models::Trajectories generated_trajectories_;
   models::Path path_;
+  geometry_msgs::msg::Pose goal_;
   xt::xtensor<float, 1> costs_;
 
-  CriticData critics_data_ =
-  {state_, generated_trajectories_, path_, costs_, settings_.model_dt, false, nullptr, nullptr,
+  CriticData critics_data_ = {
+    state_, generated_trajectories_, path_, goal_,
+    costs_, settings_.model_dt, false, nullptr, nullptr,
     std::nullopt, std::nullopt};  /// Caution, keep references
 
   rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};
+
+  geometry_msgs::msg::Twist last_command_vel_;
 };
-
-template<typename E>
-inline auto cumsum_1d(const E & expression)
-{
-  #ifdef __APPLE__
-  return utils::manual_cumsum_1d(expression);
-  #else
-  return xt::cumsum(expression, 0);
-  #endif
-}
-
-template<typename E>
-inline auto cumsum_2d(const E & expression, int axis)
-{
- #ifdef __APPLE__
-  return utils::manual_cumsum_2d(expression, axis);
- #else
-  return xt::cumsum(expression, axis);
- #endif
-}
 
 }  // namespace mppi
 

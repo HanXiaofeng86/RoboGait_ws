@@ -25,6 +25,11 @@ namespace nav2_behavior_tree
 
 /**
  * @brief A nav2_behavior_tree::BtActionNode class that wraps nav2_msgs::action::Wait
+ *
+ * Usage in XML:
+ * @code
+ * <Wait wait_duration="1.0" server_name="wait_server" server_timeout="10"/>
+ * @endcode
  */
 class WaitAction : public BtActionNode<nav2_msgs::action::Wait>
 {
@@ -46,6 +51,11 @@ public:
   void on_tick() override;
 
   /**
+   * @brief Function to read parameters and initialize class variables
+   */
+  void initialize();
+
+  /**
    * @brief Creates list of BT ports
    * @return BT::PortsList Containing basic ports along with node-specific ports
    */
@@ -53,7 +63,7 @@ public:
   {
     return providedBasicPorts(
       {
-        BT::InputPort<int>("wait_duration", 1, "Wait time")
+        BT::InputPort<double>("wait_duration", 1.0, "Wait time")
       });
   }
 };

@@ -23,15 +23,6 @@
 using std::placeholders::_1;
 using namespace std::chrono_literals;
 
-// rclcpp::init can only be called once per process, so this needs to be a global variable
-class RclCppFixture
-{
-public:
-  RclCppFixture() {rclcpp::init(0, nullptr);}
-  ~RclCppFixture() {rclcpp::shutdown();}
-};
-RclCppFixture g_rclcppfixture;
-
 class TestAmclPose : public ::testing::Test
 {
 public:
@@ -119,4 +110,37 @@ void TestAmclPose::initTestPose()
 TEST_F(TestAmclPose, SimpleAmclTest)
 {
   EXPECT_EQ(true, defaultAmclTest());
+}
+
+TEST_F(TestAmclPose, RejectNegativeLaserLikelihoodMaxDist)
+{
+  ASSERT_TRUE(defaultAmclTest());
+
+  rclcpp::SyncParametersClient parameter_client(node, "amcl");
+
+  ASSERT_TRUE(parameter_client.wait_for_service(10s));
+
+  rcl_interfaces::msg::SetParametersResult result =
+    parameter_client.set_parameters_atomically(
+    {rclcpp::Parameter("laser_likelihood_max_dist", -1.0)});
+
+  EXPECT_FALSE(result.successful);
+
+  result = parameter_client.set_parameters_atomically(
+    {rclcpp::Parameter("laser_likelihood_max_dist", 1.0)});
+
+  EXPECT_TRUE(result.successful);
+}
+
+int main(int argc, char **argv)
+{
+  ::testing::InitGoogleTest(&argc, argv);
+
+  rclcpp::init(0, nullptr);
+
+  int result = RUN_ALL_TESTS();
+
+  rclcpp::shutdown();
+
+  return result;
 }

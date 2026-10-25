@@ -42,7 +42,7 @@ B1/B2 的底盘 [v,ω] 只来自 MPPI。B3 单独发前后速度，仍经 safety
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash && source install/setup.bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ```
 
 布尔参数必须写成 `True` / `False`（首字母大写）。
@@ -909,7 +909,7 @@ rviz2 -d $(ros2 pkg prefix robot_mppi_navigation)/share/robot_mppi_navigation/rv
 ```bash
 cd ~/RoboGait_ws
 rm -rf build/robot_mppi_navigation install/robot_mppi_navigation
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select robot_mppi_navigation --symlink-install
 source install/setup.bash
 ```
@@ -927,11 +927,11 @@ source install/setup.bash
 1. 代价地图 `obstacle_min_range: 0`，雷达把**车身**扫成障碍，车被自己围住。  
 2. `vx_max: 1.2` 前瞻太远，室内一采样就进膨胀层。控制环还经常 `missed 20 Hz`。
 
-**处理（主修复仍是雷达滤车身）：** 已改日常导航 `nav2_pure_mppi_params.yaml`，**本包跟线**同样改了 `robot_simple_commander/config/nav2_mppi_params.yaml`（launch 读的是这一份，不是日常那份）：雷达忽略 **0.40 m 内**（Mini 雷达在车头，车尾约 0.45 m 会被扫成障碍；**不要把 obstacle/raytrace min_range 改回 0**）。`vx_max` 现为 **1.00 m/s 上限**（`wz_max` 1.20），不是恒速巡航：0.40 跟不上人，1.2 会让每个采样都撞膨胀格。平滑器 `max_velocity` 必须与 `vx_max`/`wz_max` 一致。若再出现 `Optimizer fail`，先把 `vx_max` **降回 0.70–0.80**，不要往 1.2 加。Humble MPPI 必须 **20 Hz 且 model_dt=0.05**，改成 10 Hz 会直接报 `Controller period more then model dt` 起不来。重启整栈（yaml 要重启 launch）：
+**处理（主修复仍是雷达滤车身）：** 已改日常导航 `nav2_pure_mppi_params.yaml`，**本包跟线**同样改了 `robot_simple_commander/config/nav2_mppi_params.yaml`（launch 读的是这一份，不是日常那份）：雷达忽略 **0.40 m 内**（Mini 雷达在车头，车尾约 0.45 m 会被扫成障碍；**不要把 obstacle/raytrace min_range 改回 0**）。`vx_max` 现为 **1.00 m/s 上限**（`wz_max` 1.20），不是恒速巡航：0.40 跟不上人，1.2 会让每个采样都撞膨胀格。平滑器 `max_velocity` 必须与 `vx_max`/`wz_max` 一致。若再出现 `Optimizer fail`，先把 `vx_max` **降回 0.70–0.80**，不要往 1.2 加。Jazzy MPPI 必须 **20 Hz 且 model_dt=0.05**，改成 10 Hz 会直接报 `Controller period more then model dt` 起不来。重启整栈（yaml 要重启 launch）：
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash && source install/setup.bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
   map:=$HOME/RoboGait_ws/src/robot_slam_mapping/maps/mini_lab2.yaml
 ```
@@ -944,7 +944,7 @@ ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select nav2_util robot_mppi_navigation --symlink-install
 source install/setup.bash
 ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
@@ -965,7 +965,7 @@ ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 source ~/RoboGait_ws/install/setup.bash
 echo $AMENT_PREFIX_PATH | tr ':' '\n' | head
 # 第一行应是 /home/robogait/RoboGait_ws/install/...
@@ -998,7 +998,7 @@ ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 source ~/RoboGait_ws/install/setup.bash
 ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
   map:=$HOME/RoboGait_ws/src/robot_slam_mapping/maps/mini_lab2.yaml
@@ -1026,7 +1026,7 @@ ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select bno055 --symlink-install
 source install/setup.bash
 ```
@@ -1037,7 +1037,7 @@ source install/setup.bash
 
 **现象：** 点 Goal 后车能走，但全程差不多一个慢速；走廊/空地也不加速。
 
-**原因：** 没有单独的「恒速巡航」。Humble MPPI 每个周期在 `0 … vx_max` 里采样，空地本来可以用更高的线速度，靠近膨胀障碍会自己减速。之前为了防撞/防猛冲把两处都压低了：
+**原因：** 没有单独的「恒速巡航」。Jazzy MPPI 每个周期在 `0 … vx_max` 里采样，空地本来可以用更高的线速度，靠近膨胀障碍会自己减速。之前为了防撞/防猛冲把两处都压低了：
 
 1. `vx_max: 0.80`（上限太低，室内看起来像恒速）。
 2. 平滑器 `max_accel: 0.45`（到 0.80 大约要 1.8 秒，实验室短距离根本拉不满）。
@@ -1101,7 +1101,7 @@ pkill -9 -f rviz_goal_navigation
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select nav2_util nav2_planner nav2_navfn_planner nav2_behavior_tree --symlink-install
 source install/setup.bash
 ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
@@ -1135,7 +1135,7 @@ ros2 launch robot_mppi_navigation rviz_goal_navigation.launch.py \
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash && source install/setup.bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 run robogait_gimbal dynamixel_driver
 ```
 
@@ -1179,7 +1179,7 @@ ros2 launch robogait_perception person_source.launch.py
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash && source install/setup.bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch robogait_perception person_source.launch.py
 ```
 
@@ -1197,7 +1197,7 @@ RViz 左边勾上 **CameraPose**：橙色箭头 = 镜头朝向，白字 Camera�
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash && source install/setup.bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch robogait_perception person_source.launch.py
 ```
 
@@ -1239,7 +1239,7 @@ ros2 launch robogait_gimbal test_gimbal.launch.py
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select robogait_perception robogait_gimbal --symlink-install
 source install/setup.bash
 ros2 launch robogait_gimbal test_gimbal.launch.py
@@ -1260,7 +1260,7 @@ ros2 launch robogait_gimbal test_gimbal.launch.py
 ```bash
 # 停掉旧的 person_source / test_gimbal，重新编译后再开
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select robogait_perception --symlink-install
 source install/setup.bash
 ros2 launch robogait_perception person_source.launch.py
@@ -1311,7 +1311,7 @@ ros2 launch robogait_gimbal test_gimbal.launch.py
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select robogait_perception robogait_gimbal --symlink-install
 source install/setup.bash
 ros2 launch robogait_gimbal test_gimbal.launch.py
@@ -1367,7 +1367,7 @@ RViz 左边 Color / Depth 写着 **No Image**（Nuitrack 不发彩图）。走�
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 colcon build --packages-select robogait_perception robogait_gimbal --symlink-install
 source ~/rover_workspace_final/install/setup.bash
 source ~/RoboGait_ws/install/setup.bash
@@ -1404,7 +1404,7 @@ ros2 node list
 
 ```bash
 cd ~/RoboGait_ws
-source /opt/ros/humble/setup.bash && source install/setup.bash
+source /opt/ros/jazzy/setup.bash && source install/setup.bash
 ros2 launch robot_slam_mapping slam_mapping.launch.py
 ```
 

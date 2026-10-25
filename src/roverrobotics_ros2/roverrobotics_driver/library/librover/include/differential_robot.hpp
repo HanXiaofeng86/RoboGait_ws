@@ -38,6 +38,7 @@ class RoverRobotics::DifferentialRobot
                      float robot_length,
                      Control::pid_gains pid,
                      Control::angular_scaling_params angular_scale);
+  ~DifferentialRobot() override;
 
   /*
    * @brief Trim Robot Velocity
@@ -122,7 +123,7 @@ class RoverRobotics::DifferentialRobot
 
   std::unique_ptr<Utilities::PersistentParams> persistent_params_;
 
-  const std::string ROBOT_PARAM_PATH = strcat(std::getenv("HOME"), "/robot.config");
+  const std::string ROBOT_PARAM_PATH = robot_config_path();
 
   /* metric units (meters) */
   Control::robot_geometry robot_geometry_;
@@ -153,6 +154,7 @@ class RoverRobotics::DifferentialRobot
   std::unique_ptr<CommBase> comm_base_;
   std::string comm_type_;
 
+  std::atomic<bool> running_{true};
   std::thread write_to_robot_thread_;
   std::thread motor_speed_update_thread_;
   std::mutex robotstatus_mutex_;
@@ -160,7 +162,8 @@ class RoverRobotics::DifferentialRobot
   /* main data structure */
   robotData robotstatus_;
 
-  double motors_speeds_[4];
+  /* VESC ids are 1..4, so index 0 is unused. */
+  double motors_speeds_[5] = {};
   double trimvalue_ = 0;
   
   bool estop_;

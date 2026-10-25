@@ -21,7 +21,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/battery_state.hpp"
-#include "behaviortree_cpp_v3/condition_node.h"
+#include "behaviortree_cpp/condition_node.h"
 
 namespace nav2_behavior_tree
 {
@@ -29,6 +29,11 @@ namespace nav2_behavior_tree
 /**
  * @brief A BT::ConditionNode that listens to a battery topic and
  * returns SUCCESS when battery is charging and FAILURE otherwise
+ *
+ * Usage in XML:
+ * @code
+ * <IsBatteryCharging battery_topic="/battery_status"/>
+ * @endcode
  */
 class IsBatteryChargingCondition : public BT::ConditionNode
 {
@@ -58,7 +63,7 @@ public:
   {
     return {
       BT::InputPort<std::string>(
-        "battery_topic", std::string("/battery_status"), "Battery topic")
+        "battery_topic", "/battery_status", "Battery topic")
     };
   }
 

@@ -25,9 +25,19 @@ namespace nav2_behavior_tree
 
 /**
  * @brief A nav2_behavior_tree::BtActionNode class that wraps nav2_msgs::action::DriveOnHeading
+ *
+ * Usage in XML:
+ * @code
+ * <DriveOnHeading dist_to_travel="0.2" speed="0.05"
+ *                 server_name="backup_server" server_timeout="10"
+ *                 error_code_id="{drive_on_heading_error_code}"/>
+ * @endcode
  */
 class DriveOnHeadingAction : public BtActionNode<nav2_msgs::action::DriveOnHeading>
 {
+  using Action = nav2_msgs::action::DriveOnHeading;
+  using ActionResult = Action::Result;
+
 public:
   /**
    * @brief A constructor for nav2_behavior_tree::DriveOnHeadingAction
@@ -41,6 +51,11 @@ public:
     const BT::NodeConfiguration & conf);
 
   /**
+   * @brief Function to read parameters and initialize class variables
+   */
+  void initialize();
+
+  /**
    * @brief Creates list of BT ports
    * @return BT::PortsList Containing basic ports along with node-specific ports
    */
@@ -50,11 +65,35 @@ public:
       {
         BT::InputPort<double>("dist_to_travel", 0.15, "Distance to travel"),
         BT::InputPort<double>("speed", 0.025, "Speed at which to travel"),
-        BT::InputPort<double>("time_allowance", 10.0, "Allowed time for driving on heading")
+        BT::InputPort<double>("time_allowance", 10.0, "Allowed time for driving on heading"),
+        BT::OutputPort<Action::Result::_error_code_type>(
+          "error_code_id", "The drive on heading behavior server error code")
       });
   }
+
+  /**
+ * @brief Function to perform some user-defined operation on tick
+ */
+  void on_tick() override;
+
+  /**
+ * @brief Function to perform some user-defined operation upon successful completion of the action
+ */
+  BT::NodeStatus on_success() override;
+
+  /**
+   * @brief Function to perform some user-defined operation upon abortion of the action
+   */
+  BT::NodeStatus on_aborted() override;
+
+  /**
+   * @brief Function to perform some user-defined operation upon cancellation of the action
+   */
+  BT::NodeStatus on_cancelled() override;
+
+private:
+  bool initalized_;
 };
 
 }  // namespace nav2_behavior_tree
-
 #endif  // NAV2_BEHAVIOR_TREE__PLUGINS__ACTION__DRIVE_ON_HEADING_ACTION_HPP_

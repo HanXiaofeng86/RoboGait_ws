@@ -4,13 +4,13 @@
 # Then open:  https://app.foxglove.dev  -> Open connection -> Foxglove WebSocket -> ws://localhost:8765
 set -euo pipefail
 
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 source "${HOME}/RoboGait_ws/install/setup.bash"
 
 if ! ros2 pkg prefix foxglove_bridge >/dev/null 2>&1; then
-  echo "[foxglove] Installing ros-humble-foxglove-bridge (needs sudo once)..."
+  echo "[foxglove] Installing ros-jazzy-foxglove-bridge (needs sudo once)..."
   sudo apt-get update -qq
-  sudo apt-get install -y ros-humble-foxglove-bridge
+  sudo apt-get install -y ros-jazzy-foxglove-bridge
 fi
 
 echo "[foxglove] Bridge on ws://127.0.0.1:8765"
