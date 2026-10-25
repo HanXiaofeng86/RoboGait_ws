@@ -17,13 +17,19 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import (DeclareLaunchArgument, GroupAction,
-                            IncludeLaunchDescription, SetEnvironmentVariable)
+from launch.actions import (DeclareLaunchArgument, EmitEvent, GroupAction,
+                            IncludeLaunchDescription, LogInfo,
+                            RegisterEventHandler, SetEnvironmentVariable)
 from launch.conditions import IfCondition
+from launch.events import matches_action
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression, PathJoinSubstitution
+from launch_ros.actions import LifecycleNode
 from launch_ros.actions import Node
 from launch_ros.actions import PushRosNamespace
+from launch_ros.event_handlers import OnStateTransition
+from launch_ros.events.lifecycle import ChangeState
+from lifecycle_msgs.msg import Transition
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml
 
@@ -186,16 +192,35 @@ def generate_launch_description():
     map_file_arg = PathJoinSubstitution([
         get_package_share_directory('roverrobotics_driver'), 'maps', map_file])
 
-    start_async_slam_toolbox_node = Node(
+    start_async_slam_toolbox_node = LifecycleNode(
         parameters=[
           slam_params_file,
-          {'use_sim_time': use_sim_time},
+          {'use_sim_time': use_sim_time, 'use_lifecycle_manager': False},
           {'map_file_name': map_file_arg}
         ],
         package='slam_toolbox',
         executable='localization_slam_toolbox_node',
         name='slam_toolbox',
+        namespace='',
         output='screen')
+    configure_slam = EmitEvent(
+        event=ChangeState(
+            lifecycle_node_matcher=matches_action(start_async_slam_toolbox_node),
+            transition_id=Transition.TRANSITION_CONFIGURE,
+        ))
+    activate_slam = RegisterEventHandler(
+        OnStateTransition(
+            target_lifecycle_node=start_async_slam_toolbox_node,
+            start_state='configuring',
+            goal_state='inactive',
+            entities=[
+                LogInfo(msg='slam_toolbox configured, activating.'),
+                EmitEvent(event=ChangeState(
+                    lifecycle_node_matcher=matches_action(start_async_slam_toolbox_node),
+                    transition_id=Transition.TRANSITION_ACTIVATE,
+                )),
+            ],
+        ))
     
     # Create the launch description and populate
     ld = LaunchDescription()
@@ -222,6 +247,8 @@ def generate_launch_description():
     # Add the actions to launch all of the navigation nodes
     ld.add_action(robot_localizer_launch)
     ld.add_action(start_async_slam_toolbox_node)
+    ld.add_action(configure_slam)
+    ld.add_action(activate_slam)
     ld.add_action(bringup_cmd_group)
 
     return ld
